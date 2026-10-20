@@ -96,7 +96,7 @@ score = sum(1.0 / (k + rank) for rank in ranks)
 | 常量 | `UPPER_SNAKE` | `MAX_GUARD_RETRY` |
 | Pydantic 模型 | `PascalCase` + `Request/Response` 后缀 | `ChatRequest`、`ChatResponse` |
 | 私有成员 | 前缀 `_` | `_rrf_fuse()` |
-| 测试文件 | `test_<被测模块>.py` | `test_retriever.py` |
+| 测试文件 | `test_<被测模块>.py` | `test_rag_retrieval.py` |
 
 **类型别名与协议**统一放 `app/core/` 或就近模块，避免出现「types.py 垃圾桶」。
 

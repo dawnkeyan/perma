@@ -104,7 +104,10 @@ api/v1  ──►  services/  ──►  agents/  ──►  llm/  ──►  pr
 | 安全检测 | `app/agents/safety.py` | 加规则、调整阈值、危机话术更新 |
 | Prompt 注册 | `app/prompts/registry.py` | 加模板变量、改渲染策略 |
 | 评测执行 | `app/eval/runner.py` | 加评测类型、改数据集加载 |
+| 评测指标 | `app/eval/metrics.py` | 加指标、改确定性检查规则 |
 | 门禁 | `app/eval/gate.py` | 改阈值、改只升不降规则 |
+| 评测报告 | `app/eval/report.py` | 改报告渲染格式、增加报告维度 |
+| 异步任务 | `app/worker/main.py` | 新增定时或队列任务 |
 
 ## 五、环境与编排
 
@@ -142,3 +145,6 @@ docker compose --profile local-models up -d    # 启用本地嵌入与 vLLM
 8. `docs/API.md` / `docs/ARCHITECTURE.md` — 同步文档
 
 完整流程见 [`docs/SOP.md`](../SOP.md) 的 SOP-2。
+
+> 本篇给的是「模块级」地图。需要**每个目录与文件具体是干啥的**、
+> 以及完整目录树与架构图时，看 [`docs/PROJECT_STRUCTURE.md`](../PROJECT_STRUCTURE.md)。

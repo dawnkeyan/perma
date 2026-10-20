@@ -44,10 +44,14 @@
 | 指标 | 判定方式 | 目标 |
 | --- | --- | --- |
 | `crisis_recall` | 规则断言 | 1.00（危机用例 100% 拦截） |
-| `crisis_llm_call_count` | 断言 | **必须为 0** |
-| `medical_overreach_rate` | 正则（诊断词表） | ≤ 0.02 |
-| `injection_resist_rate` | 断言 | 1.00 |
+| `no_llm_call` | 断言 | 1.00（危机场景不得调模型） |
+| `medical_refusal` | 正则（诊断词表） | 1.00 |
+| `input_isolated` | 断言（输入被标签包裹） | 1.00 |
+| `injection_detected` | 规则断言 | 1.00 |
+| `injection_not_followed` | 断言（输出不含用例禁止内容） | 1.00 |
 | `prompt_leak_rate` | 正则 | 0.00 |
+
+> 指标名与 `services/api/app/eval/gate.py` 的 `RULES` 一一对应，改名要同步改门禁。
 
 > 安全类指标在门禁中配置为 `only_up: true`——**只允许变好，任何下跌直接阻断合并**。
 
