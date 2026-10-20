@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import time
 from abc import ABC, abstractmethod
@@ -19,11 +18,10 @@ from app.core.config import settings
 from app.core.logging import get_logger
 from app.llm.schemas import (
     Embedding,
-    FinishReason,
     FatalProviderError,
+    FinishReason,
     LLMRequest,
     LLMResponse,
-    Message,
     RetryableProviderError,
     Usage,
 )
@@ -49,8 +47,13 @@ class BaseProvider(ABC):
     async def embed(self, texts: list[str], model: str) -> Embedding:
         """批量向量化。"""
 
-    async def aclose(self) -> None:
-        """释放底层连接池。"""
+    async def aclose(self) -> None:  # noqa: B027
+        """释放底层连接池。
+
+        默认空实现（可选钩子）：大部分 provider 用短连接，无需额外释放；
+        持有长连接的子类再覆写。故意不声明为 abstract——
+        那样会强迫每个子类写一个无意义的空方法。
+        """
 
     def _client(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(
@@ -77,9 +80,7 @@ class OpenAICompatProvider(BaseProvider):
             "model": model,
             "messages": [m.to_openai() for m in request.messages],
             "temperature": (
-                request.temperature
-                if request.temperature is not None
-                else settings.llm_temperature
+                request.temperature if request.temperature is not None else settings.llm_temperature
             ),
             "max_tokens": request.max_tokens or settings.llm_max_tokens,
             "stream": False,
@@ -174,9 +175,7 @@ class OpenAICompatProvider(BaseProvider):
             "model": model,
             "messages": [m.to_openai() for m in request.messages],
             "temperature": (
-                request.temperature
-                if request.temperature is not None
-                else settings.llm_temperature
+                request.temperature if request.temperature is not None else settings.llm_temperature
             ),
             "max_tokens": request.max_tokens or settings.llm_max_tokens,
             "stream": True,
@@ -190,48 +189,50 @@ class OpenAICompatProvider(BaseProvider):
         completion_chars = 0
         usage = Usage()
 
-        async with self._client() as client:
-            async with client.stream("POST", "/chat/completions", json=payload) as resp:
-                if resp.status_code >= 400:
-                    await resp.aread()
-                    if resp.status_code in (401, 403):
-                        raise FatalProviderError(f"鉴权失败 ({resp.status_code})")
-                    raise RetryableProviderError(f"流式请求失败 ({resp.status_code})")
+        async with (
+            self._client() as client,
+            client.stream("POST", "/chat/completions", json=payload) as resp,
+        ):
+            if resp.status_code >= 400:
+                await resp.aread()
+                if resp.status_code in (401, 403):
+                    raise FatalProviderError(f"鉴权失败 ({resp.status_code})")
+                raise RetryableProviderError(f"流式请求失败 ({resp.status_code})")
 
-                async for line in resp.aiter_lines():
-                    if not line or not line.startswith("data:"):
-                        continue
-                    data_str = line[5:].strip()
-                    if data_str == "[DONE]":
-                        break
-                    try:
-                        chunk = json.loads(data_str)
-                    except json.JSONDecodeError:
-                        continue
+            async for line in resp.aiter_lines():
+                if not line or not line.startswith("data:"):
+                    continue
+                data_str = line[5:].strip()
+                if data_str == "[DONE]":
+                    break
+                try:
+                    chunk = json.loads(data_str)
+                except json.JSONDecodeError:
+                    continue
 
-                    if chunk.get("usage"):
-                        usage = Usage(
-                            prompt_tokens=int(chunk["usage"].get("prompt_tokens", 0)),
-                            completion_tokens=int(chunk["usage"].get("completion_tokens", 0)),
-                        )
-                    choices = chunk.get("choices") or []
-                    if not choices:
-                        continue
-                    delta = (choices[0].get("delta") or {}).get("content") or ""
-                    if not delta:
-                        continue
-                    if ttft_ms is None:
-                        ttft_ms = int((time.perf_counter() - started) * 1000)
-                    completion_chars += len(delta)
-                    yield LLMResponse(
-                        content=delta,
-                        model=model,
-                        provider=self.name,
-                        finish_reason=FinishReason.STOP,
-                        latency_ms=int((time.perf_counter() - started) * 1000),
-                        ttft_ms=ttft_ms,
-                        usage=usage,
+                if chunk.get("usage"):
+                    usage = Usage(
+                        prompt_tokens=int(chunk["usage"].get("prompt_tokens", 0)),
+                        completion_tokens=int(chunk["usage"].get("completion_tokens", 0)),
                     )
+                choices = chunk.get("choices") or []
+                if not choices:
+                    continue
+                delta = (choices[0].get("delta") or {}).get("content") or ""
+                if not delta:
+                    continue
+                if ttft_ms is None:
+                    ttft_ms = int((time.perf_counter() - started) * 1000)
+                completion_chars += len(delta)
+                yield LLMResponse(
+                    content=delta,
+                    model=model,
+                    provider=self.name,
+                    finish_reason=FinishReason.STOP,
+                    latency_ms=int((time.perf_counter() - started) * 1000),
+                    ttft_ms=ttft_ms,
+                    usage=usage,
+                )
 
         logger.debug("stream_done", provider=self.name, model=model, chars=completion_chars)
 

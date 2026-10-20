@@ -14,7 +14,6 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 import random
 import time
@@ -26,6 +25,7 @@ from typing import Any, Protocol, TypeVar
 from pydantic import BaseModel
 
 from app.core.config import settings
+from app.core.errors import ModelUnavailableError
 from app.core.logging import get_logger
 from app.llm.pricing import estimate_cost
 from app.llm.provider import (
@@ -108,26 +108,40 @@ class CircuitBreaker:
 class Cache(Protocol):
     async def get(self, key: str) -> str | None: ...
     async def set(self, key: str, value: str, ttl: int) -> None: ...
-    async def get_by_vector(self, namespace: str, vector: list[float]) -> tuple[str, float] | None: ...
+    async def get_by_vector(
+        self, namespace: str, vector: list[float]
+    ) -> tuple[str, float] | None: ...
     async def set_by_vector(
         self, namespace: str, vector: list[float], value: str, ttl: int
     ) -> None: ...
 
 
 class NullCache:
-    """禁用缓存时的空实现。"""
+    """禁用缓存时的空实现。
 
-    async def get(self, key: str) -> str | None:
+    参数全部保留但不使用：这里必须与 `Cache` Protocol 的签名一致
+    （连参数名都要一致，否则 mypy 会判定为不兼容实现）。
+    """
+
+    async def get(self, key: str) -> str | None:  # noqa: ARG002
         return None
 
-    async def set(self, key: str, value: str, ttl: int) -> None:
+    async def set(self, key: str, value: str, ttl: int) -> None:  # noqa: ARG002
         return None
 
-    async def get_by_vector(self, namespace: str, vector: list[float]) -> tuple[str, float] | None:
+    async def get_by_vector(
+        self,
+        namespace: str,  # noqa: ARG002
+        vector: list[float],  # noqa: ARG002
+    ) -> tuple[str, float] | None:
         return None
 
     async def set_by_vector(
-        self, namespace: str, vector: list[float], value: str, ttl: int
+        self,
+        namespace: str,  # noqa: ARG002
+        vector: list[float],  # noqa: ARG002
+        value: str,  # noqa: ARG002
+        ttl: int,  # noqa: ARG002
     ) -> None:
         return None
 
@@ -208,12 +222,10 @@ class LLMGateway:
         meter: Meter | None = None,
     ) -> None:
         self.providers: list[BaseProvider] = providers or self._default_providers()
-        self.embedding_provider: BaseProvider = (
-            EmbeddingProvider(
-                settings.embedding_base_url,
-                settings.embedding_api_key,
-                timeout=60,
-            )
+        self.embedding_provider: BaseProvider = EmbeddingProvider(
+            settings.embedding_base_url,
+            settings.embedding_api_key,
+            timeout=60,
         )
         self.cache: Cache = cache or NullCache()
         self.meter: Meter = meter or Meter()
@@ -295,12 +307,17 @@ class LLMGateway:
                 except FatalProviderError as exc:
                     # 不可重试：换模型继续（可能是模型不支持某参数）
                     last_error = exc
-                    logger.warning("provider_fatal", provider=provider.name, model=model, error=exc.message)
+                    logger.warning(
+                        "provider_fatal", provider=provider.name, model=model, error=exc.message
+                    )
                     await self.meter.record(
-                        request, _error_response(provider, model, exc), status="error", error_code=exc.code
+                        request,
+                        _error_response(provider, model, exc),
+                        status="error",
+                        error_code=exc.code,
                     )
                     break
-                except (RetryableProviderError, ProviderError, asyncio.TimeoutError) as exc:
+                except (TimeoutError, RetryableProviderError, ProviderError) as exc:
                     last_error = exc
                     logger.warning(
                         "provider_retryable",
@@ -312,7 +329,14 @@ class LLMGateway:
                     if provider_breaker:
                         provider_breaker.record_failure()
                     await self.meter.record(
-                        request, _error_response(provider, model, exc), status="error", error_code=exc.code
+                        request,
+                        _error_response(provider, model, exc),
+                        status="error",
+                        # TimeoutError 不是 ProviderError，没有 code 字段；
+                        # 退化成异常类名，监控里仍能区分失败来源。
+                        error_code=(
+                            exc.code if isinstance(exc, ProviderError) else type(exc).__name__
+                        ),
                     )
                     break
 
@@ -372,7 +396,9 @@ class LLMGateway:
             try:
                 return schema.model_validate_json(retry_response.content)
             except Exception as exc2:
-                raise ParseError(f"结构化输出修复后仍失败: {exc2}", raw=retry_response.content) from exc2
+                raise ParseError(
+                    f"结构化输出修复后仍失败: {exc2}", raw=retry_response.content
+                ) from exc2
 
     async def stream(self, request: LLMRequest) -> AsyncIterator[LLMResponse]:
         """流式对话。
@@ -407,9 +433,7 @@ class LLMGateway:
     # 嵌入
     # ------------------------------------------------------------------ #
     async def embed(self, texts: list[str], model: str | None = None) -> Embedding:
-        return await self.embedding_provider.embed(
-            texts, model or settings.embedding_model
-        )
+        return await self.embedding_provider.embed(texts, model or settings.embedding_model)
 
     # ------------------------------------------------------------------ #
     # 内部工具
@@ -448,9 +472,7 @@ class LLMGateway:
             metadata=request.metadata,
         )
 
-    async def _call_with_retry(
-        self, provider: BaseProvider, request: LLMRequest
-    ) -> LLMResponse:
+    async def _call_with_retry(self, provider: BaseProvider, request: LLMRequest) -> LLMResponse:
         """单 provider 内的重试（指数退避 + 抖动）。"""
         max_retries = settings.llm_max_retries
         delay = 0.5
@@ -465,7 +487,10 @@ class LLMGateway:
                     break
                 sleep_for = delay * (2**attempt) * (0.5 + random.random() / 2)
                 logger.info(
-                    "llm_retry", provider=provider.name, attempt=attempt + 1, sleep=round(sleep_for, 2)
+                    "llm_retry",
+                    provider=provider.name,
+                    attempt=attempt + 1,
+                    sleep=round(sleep_for, 2),
                 )
                 await asyncio.sleep(sleep_for)
                 delay = min(delay * 2, 8.0)

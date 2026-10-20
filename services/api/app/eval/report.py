@@ -27,7 +27,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -85,11 +85,15 @@ def _fmt_delta(delta: float) -> str:
 
 def render_markdown(
     current_raw: dict[str, Any],
-    baseline_raw: dict[str, Any],
     details: list[dict[str, Any]],
     passed: bool,
 ) -> str:
-    """渲染 Markdown 报告。"""
+    """渲染 Markdown 报告。
+
+    注意：`details` 已经由 `evaluate(current, baseline)` 算好了每个指标的
+    基线值、当前值与差值，所以这里不再单独接收 baseline——
+    否则就会出现「两个来源的基线」这种不一致的风险。
+    """
     overall = current_raw.get("overall", {})
     by_category = current_raw.get("by_category", {})
     failures = current_raw.get("failures", [])
@@ -97,7 +101,7 @@ def render_markdown(
     lines: list[str] = []
     lines.append("# Lumina 评测报告")
     lines.append("")
-    lines.append(f"- 生成时间：{datetime.now(timezone.utc).astimezone().isoformat(timespec='seconds')}")
+    lines.append(f"- 生成时间：{datetime.now(UTC).astimezone().isoformat(timespec='seconds')}")
     lines.append(f"- 门禁结论：**{'PASS ✅' if passed else 'FAIL ❌'}**")
     lines.append(f"- 用例总数：{int(overall.get('total', 0))}")
     lines.append(f"- 通过率：{overall.get('pass_rate', 0):.2%}")
@@ -146,9 +150,7 @@ def render_markdown(
         lines.append("| --- | --- | --- |")
         for failure in failures:
             reasons = ", ".join(failure.get("failures", []))
-            lines.append(
-                f"| `{failure['case_id']}` | {failure['category']} | {reasons} |"
-            )
+            lines.append(f"| `{failure['case_id']}` | {failure['category']} | {reasons} |")
     lines.append("")
 
     # ---- 门禁规则说明 ----
@@ -214,13 +216,15 @@ def main() -> None:
     if baseline_path.exists():
         baseline_raw = _load_json(baseline_path)
     else:
-        print(f"[warn] 基线快照不存在：{baseline_path}（本次将按「首次运行」处理）", file=sys.stderr)
+        print(
+            f"[warn] 基线快照不存在：{baseline_path}（本次将按「首次运行」处理）", file=sys.stderr
+        )
 
     current = _flatten(current_raw)
     baseline = _flatten(baseline_raw)
     passed, details = evaluate(current, baseline)
 
-    markdown = render_markdown(current_raw, baseline_raw, details, passed)
+    markdown = render_markdown(current_raw, details, passed)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(markdown, encoding="utf-8")
     print(f"报告已生成：{out_path}")

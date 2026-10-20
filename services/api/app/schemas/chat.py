@@ -7,13 +7,24 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 Emotion = Literal[
-    "joy", "calm", "expectation", "gratitude",
-    "fatigue", "anxiety", "sadness", "anger",
+    "joy",
+    "calm",
+    "expectation",
+    "gratitude",
+    "fatigue",
+    "anxiety",
+    "sadness",
+    "anger",
 ]
 
 FeedbackReason = Literal[
-    "too_generic", "not_empathetic", "wrong_understanding",
-    "no_action", "too_long", "unrelated", "other",
+    "too_generic",
+    "not_empathetic",
+    "wrong_understanding",
+    "no_action",
+    "too_long",
+    "unrelated",
+    "other",
 ]
 
 
@@ -38,6 +49,9 @@ class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
     context: ChatContextIn = Field(default_factory=ChatContextIn)
     idempotency_key: str | None = Field(default=None, max_length=64)
+    # 工具入口标识（见 app/tools/catalog.py）。
+    # 传了就会把该工具的检索侧重追加进 RAG，并强制走检索链路。
+    tool_id: str | None = Field(default=None, max_length=64)
 
     @field_validator("message")
     @classmethod

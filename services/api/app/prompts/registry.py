@@ -141,7 +141,9 @@ class PromptRegistry:
             key=lambda m: m.version,
         )
 
-    def render(self, name: str, variables: dict[str, Any] | None = None, version: int | None = None) -> Prompt:
+    def render(
+        self, name: str, variables: dict[str, Any] | None = None, version: int | None = None
+    ) -> Prompt:
         """渲染 Prompt。"""
         meta = self.get(name, version)
         variables = variables or {}

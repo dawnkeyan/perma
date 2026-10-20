@@ -42,7 +42,7 @@ def _new_id(prefix: str) -> str:
 
 def _now() -> dt.datetime:
     """当前 UTC 时间。"""
-    return dt.datetime.now(dt.timezone.utc)
+    return dt.datetime.now(dt.UTC)
 
 
 async def seed_users() -> list[User]:
@@ -53,10 +53,10 @@ async def seed_users() -> list[User]:
     sessionmaker = get_sessionmaker()
     async with sessionmaker() as session:
         existing = (
-            await session.execute(
-                select(User).where(User.wechat_openid.like("demo_%"))
-            )
-        ).scalars().all()
+            (await session.execute(select(User).where(User.wechat_openid.like("demo_%"))))
+            .scalars()
+            .all()
+        )
         if existing:
             logger.info(f"演示用户已存在（{len(existing)} 个），跳过")
             return list(existing)
@@ -196,8 +196,10 @@ async def seed_bad_cases() -> None:
     sessionmaker = get_sessionmaker()
     async with sessionmaker() as session:
         existing = (
-            await session.execute(select(BadCase).where(BadCase.id.like("demo_%")))
-        ).scalars().first()
+            (await session.execute(select(BadCase).where(BadCase.id.like("demo_%"))))
+            .scalars()
+            .first()
+        )
         if existing:
             logger.info("演示 BadCase 已存在，跳过")
             return
@@ -274,7 +276,7 @@ async def seed(reset: bool = False) -> int:
             await seed_sessions(users)
         await seed_bad_cases()
         await seed_tracking()
-    except Exception as exc:  # noqa: BLE001 - 顶层入口
+    except Exception as exc:
         logger.error("种子数据写入失败", error=str(exc))
         return 1
     finally:

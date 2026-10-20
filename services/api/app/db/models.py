@@ -26,7 +26,7 @@
 from __future__ import annotations
 
 import datetime as dt
-from typing import Any
+from typing import Any, ClassVar
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
@@ -46,7 +46,6 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.types import TypeDecorator
-
 
 # --------------------------------------------------------------------------- #
 # 自定义类型
@@ -77,26 +76,28 @@ class TZDateTime(TypeDecorator):
     impl = DateTime(timezone=True)
     cache_ok = True
 
-    def process_bind_param(self, value: Any, dialect: Any) -> Any:
+    def process_bind_param(self, value: Any, dialect: Any) -> Any:  # noqa: ARG002
+        # dialect 由 SQLAlchemy 传入，但本类型对所有方言行为一致，因此不用
         if value is None:
             return None
         if value.tzinfo is None:
             # 朴素 datetime 一律当作 UTC 处理，宁可统一也不要混用
-            return value.replace(tzinfo=dt.timezone.utc)
-        return value.astimezone(dt.timezone.utc)
+            return value.replace(tzinfo=dt.UTC)
+        return value.astimezone(dt.UTC)
 
-    def process_result_value(self, value: Any, dialect: Any) -> Any:
+    def process_result_value(self, value: Any, dialect: Any) -> Any:  # noqa: ARG002
+        # dialect 同上：本类型对所有方言行为一致
         if value is None:
             return None
         if value.tzinfo is None:
-            return value.replace(tzinfo=dt.timezone.utc)
-        return value.astimezone(dt.timezone.utc)
+            return value.replace(tzinfo=dt.UTC)
+        return value.astimezone(dt.UTC)
 
 
 class Base(DeclarativeBase):
     """所有 ORM 模型的基类。"""
 
-    type_annotation_map = {
+    type_annotation_map: ClassVar[dict[Any, Any]] = {
         dict[str, Any]: JSONB,
         list[str]: ARRAY(String),
     }
@@ -104,7 +105,7 @@ class Base(DeclarativeBase):
 
 def _now() -> dt.datetime:
     """当前 UTC 时间。用作 Python 侧默认值（数据库侧另有 server_default）。"""
-    return dt.datetime.now(dt.timezone.utc)
+    return dt.datetime.now(dt.UTC)
 
 
 # --------------------------------------------------------------------------- #
@@ -250,9 +251,7 @@ class ChatSession(Base):
     summary_state: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     turn_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     total_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    total_cost_cny: Mapped[float] = mapped_column(
-        Numeric(10, 6), nullable=False, default=0
-    )
+    total_cost_cny: Mapped[float] = mapped_column(Numeric(10, 6), nullable=False, default=0)
     created_at: Mapped[dt.datetime] = mapped_column(
         TZDateTime, nullable=False, default=_now, server_default=func.now()
     )
@@ -397,11 +396,15 @@ class KBDocument(Base):
     tags: Mapped[list[str]] = mapped_column(ARRAY(String), nullable=False, default=list)
     # 1~5，5 表示最强证据
     evidence_level: Mapped[int] = mapped_column(
-        SmallInteger, nullable=False, default=3,
+        SmallInteger,
+        nullable=False,
+        default=3,
         server_default="3",
     )
     applicable_to: Mapped[list[str]] = mapped_column(ARRAY(String), nullable=False, default=list)
-    contraindications: Mapped[list[str]] = mapped_column(ARRAY(String), nullable=False, default=list)
+    contraindications: Mapped[list[str]] = mapped_column(
+        ARRAY(String), nullable=False, default=list
+    )
     license: Mapped[str] = mapped_column(String(64), nullable=False, default="original")
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     doc_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
@@ -445,7 +448,14 @@ class KBChunk(Base):
     token_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     # 标题层级路径，如 ["认知重构", "操作步骤"]
     heading_path: Mapped[list[str]] = mapped_column(ARRAY(String), nullable=False, default=list)
-    metadata: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    # 注意：属性名不能叫 `metadata`——
+    # SQLAlchemy 的 DeclarativeBase 已经有一个 `metadata` 类属性（表元数据），
+    # 同名会直接冲突。这里用 `chunk_metadata` 做属性名，
+    # 但通过 mapped_column 的第一个参数把**数据库列名固定为 "metadata"**，
+    # 所以存量数据与迁移脚本都不需要改。
+    chunk_metadata: Mapped[dict[str, Any]] = mapped_column(
+        "metadata", JSONB, nullable=False, default=dict
+    )
     embedding: Mapped[Any] = mapped_column(VectorType(1024), nullable=False)
     created_at: Mapped[dt.datetime] = mapped_column(
         TZDateTime, nullable=False, default=_now, server_default=func.now()
@@ -471,9 +481,7 @@ class BadCase(Base):
 
     __tablename__ = "bad_cases"
     __table_args__ = (
-        CheckConstraint(
-            "priority IN ('P0','P1','P2','P3')", name="ck_badcase_priority"
-        ),
+        CheckConstraint("priority IN ('P0','P1','P2','P3')", name="ck_badcase_priority"),
         Index("idx_badcases_status", "status", "priority", "created_at"),
         Index("idx_badcases_category", "category", "created_at"),
     )

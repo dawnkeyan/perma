@@ -46,7 +46,7 @@ async def stream_message(
         except AppError as exc:
             yield _sse("error", exc.to_payload())
             return
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             yield _sse("error", {"code": "INTERNAL", "message": str(exc)})
             return
 
@@ -63,9 +63,9 @@ async def stream_message(
         for piece in _split_for_stream(response.content):
             yield _sse("delta", {"text": piece})
         for citation in response.citations:
-            yield _sse("citation", citation)
-        if response.sections.get("action"):
-            yield _sse("action", {"text": response.sections["action"]})
+            yield _sse("citation", citation.model_dump())
+        if response.sections.action:
+            yield _sse("action", {"text": response.sections.action})
         yield _sse("done", {"message_id": response.message_id})
 
     return StreamingResponse(

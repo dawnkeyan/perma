@@ -7,10 +7,21 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+
+# 逗号分隔的环境变量列表。
+#
+# 必须加 NoDecode：pydantic-settings 默认会把 list 等复杂字段当作 JSON 来解析环境变量的值，
+# 所以 `LLM_FALLBACK_MODELS=qwen-turbo,deepseek-chat` 会直接报
+# "error parsing value for field ... from source DotEnvSettingsSource"，
+# 服务在启动阶段就崩了——而且这个报错发生在字段校验器之前，_split_csv 根本没机会跑。
+#
+# NoDecode 让环境变量保持原始字符串，再由下面的 _split_csv 校验器按逗号切分。
+# 这样两种写法都支持：逗号分隔（推荐，可读性好）与 JSON 数组。
+CsvList = Annotated[list[str], NoDecode]
 
 
 class Settings(BaseSettings):
@@ -72,7 +83,7 @@ class Settings(BaseSettings):
     llm_max_tokens: int = 2048
     llm_timeout: int = 60
     llm_max_retries: int = 3
-    llm_fallback_models: list[str] = Field(default_factory=list)
+    llm_fallback_models: CsvList = Field(default_factory=list)
     llm_reasoning_model: str = ""
     llm_reasoning_temperature: float = 0.3
     llm_local_enabled: bool = False
@@ -109,12 +120,18 @@ class Settings(BaseSettings):
     jwt_secret: str = "dev-only-secret-change-me"
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60 * 24 * 7
-    cors_origins: list[str] = Field(default_factory=list)
+    cors_origins: CsvList = Field(default_factory=list)
     rate_limit_per_min: int = 60
     safety_crisis_detection: bool = True
-    safety_crisis_keywords: list[str] = Field(
+    safety_crisis_keywords: CsvList = Field(
         default_factory=lambda: [
-            "自杀", "自残", "轻生", "不想活", "结束生命", "伤害自己", "活不下去",
+            "自杀",
+            "自残",
+            "轻生",
+            "不想活",
+            "结束生命",
+            "伤害自己",
+            "活不下去",
         ]
     )
     safety_crisis_hotline: str = "全国心理援助热线 12356"
@@ -136,9 +153,17 @@ class Settings(BaseSettings):
     @field_validator("cors_origins", "llm_fallback_models", "safety_crisis_keywords", mode="before")
     @classmethod
     def _split_csv(cls, v: object) -> object:
-        """允许环境变量用逗号分隔列表。"""
-        if isinstance(v, str) and not v.strip().startswith("["):
-            return [item.strip() for item in v.split(",") if item.strip()]
+        """把逗号分隔的字符串转成列表。
+
+        配合 NoDecode 使用：环境变量里的值会以原始字符串到达这里，
+        由本校验器负责切分，因此不需要用户把列表写成 JSON 数组。
+        """
+        if isinstance(v, str):
+            text = v.strip()
+            if text.startswith("["):
+                # 兼容 JSON 数组写法
+                return v
+            return [item.strip() for item in text.split(",") if item.strip()]
         return v
 
     @property
@@ -153,7 +178,12 @@ class Settings(BaseSettings):
             chain.append(self.llm_local_model)
         # 去重且保持顺序
         seen: set[str] = set()
-        return [m for m in chain if m and not (m in seen or seen.add(m))]
+        unique: list[str] = []
+        for model in chain:
+            if model and model not in seen:
+                seen.add(model)
+                unique.append(model)
+        return unique
 
 
 @lru_cache

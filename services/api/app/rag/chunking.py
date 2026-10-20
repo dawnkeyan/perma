@@ -123,9 +123,7 @@ def split_by_heading(
         if not section_text.strip():
             continue
 
-        for parent_text in _split_by_budget(
-            section_text, parent_max_tokens, overlap_sections
-        ):
+        for parent_text in _split_by_budget(section_text, parent_max_tokens, overlap_sections):
             parent_id = f"{doc.id}_p{parent_index}"
             chunks.append(
                 Chunk(
@@ -140,9 +138,7 @@ def split_by_heading(
                 )
             )
 
-            for child_text in _split_by_budget(
-                parent_text, child_max_tokens, overlap_sections
-            ):
+            for child_text in _split_by_budget(parent_text, child_max_tokens, overlap_sections):
                 chunks.append(
                     Chunk(
                         id=f"{parent_id}_c{child_index}",

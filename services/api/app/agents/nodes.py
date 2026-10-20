@@ -14,7 +14,6 @@ from typing import Any
 
 from app.agents.safety import (
     SafetyType,
-    SafetyVerdict,
     check_output_for_diagnosis,
     check_system_prompt_leak,
     crisis_response,
@@ -28,7 +27,7 @@ from app.core.logging import get_logger
 from app.llm.gateway import get_gateway
 from app.llm.schemas import LLMRequest, Message
 from app.prompts.registry import get_registry
-from app.rag.context import assemble_context, build_emotion_context
+from app.rag.context import assemble_context
 from app.rag.retriever import HybridRetriever, RetrievedChunk
 
 logger = get_logger(__name__)
@@ -39,6 +38,25 @@ _SECTION_PATTERN = re.compile(
     re.DOTALL,
 )
 _CITATION_PATTERN = re.compile(r"\[(\d+)\]")
+
+# Prompt 模板名 / 采样温度按意图映射。
+# 键统一用「字符串字面量」而不是 Intent 枚举成员：
+# 调用方传进来的既可能是 Intent 成员（`state["intent"]`），也可能是原始字符串，
+# 统一 `str(intent)` 归一化后再查表，两种来源都能命中同一张表。
+_PROMPT_BY_INTENT: dict[str, str] = {
+    "knowledge": "knowledge",
+    "emotion_support": "coach",
+    "reflection": "coach",
+    "chitchat": "chitchat",
+    "medical": "medical",
+}
+_TEMPERATURE_BY_INTENT: dict[str, float] = {
+    "chitchat": 0.9,
+    "knowledge": 0.3,
+    "emotion_support": 0.6,
+    "reflection": 0.4,
+    "medical": 0.3,
+}
 
 
 def _now_ms(started: float) -> int:
@@ -51,10 +69,25 @@ def _push_trace(state: CoachState, node: str, started: float, summary: dict[str,
     )
 
 
+def _merge_queries(primary: list[str], extra: list[str], limit: int = 6) -> list[str]:
+    """合并子查询与工具检索侧重。
+
+    规则：
+    1. `primary`（用户原话改写出来的）在前，它的优先级更高
+    2. `extra`（工具定义的侧重方向）去重后追加在后
+    3. 总数封顶，避免检索轮次失控导致延迟抖动
+    """
+    merged = list(primary)
+    for query in extra:
+        if query and query not in merged and len(merged) < limit:
+            merged.append(query)
+    return merged
+
+
 # --------------------------------------------------------------------------- #
 # 1. entry
 # --------------------------------------------------------------------------- #
-async def entry_node(state: CoachState, session: Any = None) -> CoachState:
+async def entry_node(state: CoachState, session: Any = None) -> CoachState:  # noqa: ARG001
     """入口节点：安全检测 + 意图分类 + 上下文注入。
 
     **安全检测必须最先执行**：危机场景下整条链路要短路，
@@ -91,11 +124,23 @@ async def entry_node(state: CoachState, session: Any = None) -> CoachState:
     state["intent"] = intent
     state["needs_retrieval"] = needs_retrieval
 
+    # --- 工具入口：强制走检索 ---
+    # 用户从「心绪导航」这类工具进来的目标就是「匹配干预策略」，
+    # 所以即使意图分类判定为不需要检索，也要检索——
+    # 否则工具就退化成一句空话，达不到「建议可追溯来源」的产品承诺。
+    if state.get("tool_id"):
+        state["needs_retrieval"] = True
+
     _push_trace(
         state,
         "entry",
         started,
-        {"intent": intent, "needs_retrieval": needs_retrieval, "turn": state.get("turn", 0)},
+        {
+            "intent": intent,
+            "needs_retrieval": state["needs_retrieval"],
+            "turn": state.get("turn", 0),
+            "tool_id": state.get("tool_id", ""),
+        },
     )
     return state
 
@@ -110,8 +155,18 @@ async def _classify_intent(state: CoachState) -> tuple[str, bool]:
 
     # 规则快路径：明显是知识型提问
     knowledge_markers = (
-        "是什么", "怎么做", "如何", "为什么", "有什么方法", "什么意思",
-        "区别", "推荐", "介绍", "原理", "真的有用吗", "科学吗",
+        "是什么",
+        "怎么做",
+        "如何",
+        "为什么",
+        "有什么方法",
+        "什么意思",
+        "区别",
+        "推荐",
+        "介绍",
+        "原理",
+        "真的有用吗",
+        "科学吗",
     )
     if any(marker in query for marker in knowledge_markers) and len(query) > 6:
         return Intent.KNOWLEDGE, True
@@ -140,7 +195,7 @@ async def crisis_node(state: CoachState) -> CoachState:
     state["micro_action"] = payload["sections"].get("action", "")
     state["safety"] = {
         "type": str(SafetyType.CRISIS),
-        "model_used": False,   # 硬性保证
+        "model_used": False,  # 硬性保证
         "reason": "危机场景走硬编码路径，未调用 LLM",
     }
     _push_trace(state, "crisis", started, {"model_used": False})
@@ -163,6 +218,10 @@ async def retrieve_node(state: CoachState, session: Any = None) -> CoachState:
 
     try:
         sub_queries = await retriever.rewrite_query(query)
+        # 工具的检索侧重追加到子查询后面。
+        # 放在后面而不是替换：用户原话里的具体信息优先，
+        # 工具侧重只用来「兜住」策略匹配这一层。
+        sub_queries = _merge_queries(sub_queries, state.get("tool_focus") or [])
         state["sub_queries"] = sub_queries
 
         all_chunks: list[RetrievedChunk] = []
@@ -229,14 +288,8 @@ async def generate_node(state: CoachState) -> CoachState:
     registry = get_registry()
     gateway = get_gateway()
 
-    intent = state.get("intent", Intent.EMOTION_SUPPORT)
-    prompt_name = {
-        Intent.KNOWLEDGE: "knowledge",
-        Intent.EMOTION_SUPPORT: "coach",
-        Intent.REFLECTION: "coach",
-        Intent.CHITCHAT: "chitchat",
-        Intent.MEDICAL: "medical",
-    }.get(intent, "coach")
+    intent = state.get("intent") or Intent.EMOTION_SUPPORT
+    prompt_name = _PROMPT_BY_INTENT.get(str(intent), "coach")
 
     try:
         prompt = registry.render(
@@ -346,12 +399,15 @@ async def guard_node(state: CoachState) -> CoachState:
     # 4) 系统提示词泄露
     registry = get_registry()
     try:
-        system_prompt = registry.render("coach", {
-            "emotion_context": "",
-            "user_profile": "",
-            "context": "",
-            "history": "",
-        }).body
+        system_prompt = registry.render(
+            "coach",
+            {
+                "emotion_context": "",
+                "user_profile": "",
+                "context": "",
+                "history": "",
+            },
+        ).body
     except Exception:
         system_prompt = ""
     if check_system_prompt_leak(answer, system_prompt):
@@ -452,13 +508,7 @@ def _format_profile(profile: dict[str, Any]) -> str:
 
 def _temperature_for(intent: str) -> float:
     """按意图选择温度。闲聊更发散，知识问答更确定。"""
-    return {
-        Intent.CHITCHAT: 0.9,
-        Intent.KNOWLEDGE: 0.3,
-        Intent.EMOTION_SUPPORT: 0.6,
-        Intent.REFLECTION: 0.4,
-        Intent.MEDICAL: 0.3,
-    }.get(intent, 0.6)
+    return _TEMPERATURE_BY_INTENT.get(str(intent), 0.6)
 
 
 def _parse_sections(answer: str) -> dict[str, Any]:
@@ -486,7 +536,7 @@ def _fallback_system_prompt(context_text: str) -> str:
     )
 
 
-def _fallback_answer(intent: str, state: CoachState) -> str:
+def _fallback_answer(intent: str, state: CoachState) -> str:  # noqa: ARG001
     if intent == Intent.MEDICAL:
         return (
             "<共情>你正在承受一些不容易的情绪，这值得被认真对待。</共情>\n"

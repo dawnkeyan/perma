@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
-from typing import Any
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -20,7 +19,7 @@ logger = get_logger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # noqa: ARG001
     configure_logging()
     logger.info("app_starting", env=settings.app_env)
     yield
@@ -65,7 +64,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         return JSONResponse(status_code=exc.status_code, content={"error": exc.to_payload()})
 
     @app.exception_handler(RequestValidationError)
-    async def _validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
+    async def _validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:  # noqa: ARG001
         details = [
             {
                 "field": ".".join(str(x) for x in err.get("loc", ())[1:]),
@@ -85,7 +84,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         )
 
     @app.exception_handler(Exception)
-    async def _unhandled(request: Request, exc: Exception) -> JSONResponse:
+    async def _unhandled(request: Request, exc: Exception) -> JSONResponse:  # noqa: ARG001
         logger.exception("unhandled_exception", path=request.url.path)
         return JSONResponse(
             status_code=500,
@@ -94,11 +93,12 @@ def register_exception_handlers(app: FastAPI) -> None:
 
 
 def register_routers(app: FastAPI) -> None:
-    from app.api.v1 import chat, health, journal
+    from app.api.v1 import chat, health, journal, tools
 
     app.include_router(health.router, prefix="/healthz", tags=["health"])
     app.include_router(chat.router, prefix="/v1/chat", tags=["chat"])
     app.include_router(journal.router, prefix="/v1/journal", tags=["journal"])
+    app.include_router(tools.router, prefix="/v1/tools", tags=["tools"])
 
 
 def register_metrics(app: FastAPI) -> None:

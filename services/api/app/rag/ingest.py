@@ -48,7 +48,7 @@ from sqlalchemy import delete, select, text
 
 from app.core.config import settings
 from app.core.logging import get_logger
-from app.db.models import KBDocument, KBChunk
+from app.db.models import KBChunk, KBDocument
 from app.db.session import dispose_engine, get_sessionmaker
 from app.rag.chunking import Chunk, Document, chunk_documents, load_documents
 
@@ -81,7 +81,7 @@ async def embed_chunks(chunks: list[Chunk], batch_size: int | None = None) -> li
         texts = [c.content for c in batch]
         try:
             embedding = await gateway.embed(texts)
-        except Exception as exc:  # noqa: BLE001 - 嵌入失败是致命问题，需要中断
+        except Exception as exc:
             logger.error(
                 "embedding_failed", batch_start=start, batch_size=len(batch), error=str(exc)
             )
@@ -163,7 +163,9 @@ class BM25Indexer:
         else:
             logger.info("bm25_index_created", index=self.index)
 
-    async def index_chunks(self, client: Any, chunks: list[Chunk], docs: dict[str, Document]) -> int:
+    async def index_chunks(
+        self, client: Any, chunks: list[Chunk], docs: dict[str, Document]
+    ) -> int:
         """批量写入倒排索引。"""
         if not chunks:
             return 0
@@ -187,7 +189,9 @@ class BM25Indexer:
                         "content": chunk.content,
                         "heading_path": chunk.heading_path,
                         "tags": (doc.metadata.get("tags") or []) if doc else [],
-                        "evidence_level": int((doc.metadata.get("evidence_level") or 3) if doc else 3),
+                        "evidence_level": int(
+                            (doc.metadata.get("evidence_level") or 3) if doc else 3
+                        ),
                     },
                     ensure_ascii=False,
                 )
@@ -239,7 +243,7 @@ async def _upsert_documents(
                     license=doc.metadata.get("license") or "original",
                     content_hash=doc.content_hash,
                     doc_version=1,
-                    ingested_at=dt.datetime.now(dt.timezone.utc),
+                    ingested_at=dt.datetime.now(dt.UTC),
                 )
             )
             continue
@@ -257,7 +261,7 @@ async def _upsert_documents(
         existing.contraindications = list(doc.metadata.get("contraindications") or [])
         existing.content_hash = doc.content_hash
         existing.doc_version = (existing.doc_version or 1) + 1
-        existing.ingested_at = dt.datetime.now(dt.timezone.utc)
+        existing.ingested_at = dt.datetime.now(dt.UTC)
 
     await session.flush()
     return mapping
@@ -381,7 +385,7 @@ async def ingest_knowledge_base(
                 await indexer.ensure_index(client)
                 indexed = await indexer.index_chunks(client, chunks, doc_map)
             stats["bm25_indexed"] = indexed
-        except Exception as exc:  # noqa: BLE001 - BM25 是增强路径
+        except Exception as exc:
             logger.warning("bm25_index_failed", error=str(exc))
             stats["bm25_indexed"] = 0
     else:
@@ -407,7 +411,9 @@ async def _cleanup_orphans() -> int:
                 """
             )
         )
-        count = int(result.rowcount or 0)
+        # `Result` 的类型标注里没有 rowcount（不同驱动返回类型不同），
+        # 用 getattr 兼容一下，拿不到就当 0。
+        count = int(getattr(result, "rowcount", 0) or 0)
         await session.commit()
     if count:
         logger.info("orphan_chunks_cleaned", count=count)
@@ -449,7 +455,7 @@ def main() -> int:
                 dry_run=args.dry_run,
             )
         )
-    except Exception as exc:  # noqa: BLE001 - 顶层入口
+    except Exception as exc:
         logger.error("知识库导入失败", error=str(exc))
         return 1
     finally:

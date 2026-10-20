@@ -15,9 +15,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.graph import get_graph
 from app.agents.state import make_initial_state
+from app.core.errors import ValidationError
 from app.core.logging import get_logger
 from app.rag.context import build_emotion_context
 from app.schemas.chat import ChatRequest, ChatResponse
+from app.tools.catalog import ToolSpec, get_tool
 
 logger = get_logger(__name__)
 
@@ -28,11 +30,22 @@ class ChatService:
 
     async def chat(self, user_id: str, request: ChatRequest) -> ChatResponse:
         """处理一次对话。"""
+        tool = self._resolve_tool(request.tool_id)
         history = await self._load_history(request.session_id, limit=6)
-        emotion_context = await self._load_emotion_context(
-            user_id, request.context.emotion_window_days
-        )
-        user_profile = await self._load_profile(user_id) if request.context.include_profile else {}
+
+        # 工具声明需要的上下文优先于客户端传入的设置——
+        # 例如「心绪导航」需要至少 7 天的情绪记录才能「识别状态」，
+        # 客户端传了 3 天也不能让它真的只看 3 天。
+        window_days = request.context.emotion_window_days
+        include_profile = request.context.include_profile
+        if tool is not None:
+            if "emotion_window" in tool.requires_context:
+                window_days = max(window_days, 7)
+            if "profile" in tool.requires_context:
+                include_profile = True
+
+        emotion_context = await self._load_emotion_context(user_id, window_days)
+        user_profile = await self._load_profile(user_id) if include_profile else {}
 
         state = make_initial_state(
             user_id=user_id,
@@ -41,6 +54,8 @@ class ChatService:
             history=history,
             emotion_context=emotion_context,
             user_profile=user_profile,
+            tool_id=tool.id if tool else "",
+            tool_focus=list(tool.focus) if tool else [],
         )
 
         graph = get_graph()
@@ -62,32 +77,55 @@ class ChatService:
         )
 
     # ------------------------------------------------------------------ #
+    # 工具解析
+    # ------------------------------------------------------------------ #
+    @staticmethod
+    def _resolve_tool(tool_id: str | None) -> ToolSpec | None:
+        """解析工具标识。
+
+        传了不存在的工具 id 必须报错而不是静默忽略：
+        静默忽略会让客户端以为「工具已生效」，但实际检索侧重没注入，
+        用户拿到的是一份没有策略匹配的结果——这是最难排查的一类问题。
+        """
+        if not tool_id:
+            return None
+        tool = get_tool(tool_id)
+        if tool is None:
+            raise ValidationError(f"未知的工具：{tool_id}")
+        return tool
+
+    # ------------------------------------------------------------------ #
     # 数据读取
     # ------------------------------------------------------------------ #
     async def _load_history(self, session_id: str, limit: int) -> list[dict[str, str]]:
         from sqlalchemy import text
 
         rows = (
-            await self.session.execute(
-                text(
-                    """
+            (
+                await self.session.execute(
+                    text(
+                        """
                     SELECT role, content FROM chat_messages
                     WHERE session_id = :sid
                     ORDER BY created_at DESC LIMIT :lim
                     """
-                ),
-                {"sid": session_id, "lim": limit},
+                    ),
+                    {"sid": session_id, "lim": limit},
+                )
             )
-        ).mappings().all()
+            .mappings()
+            .all()
+        )
         return [{"role": r["role"], "content": r["content"]} for r in reversed(rows)]
 
     async def _load_emotion_context(self, user_id: str, days: int) -> dict[str, Any]:
         from sqlalchemy import text
 
         rows = (
-            await self.session.execute(
-                text(
-                    """
+            (
+                await self.session.execute(
+                    text(
+                        """
                     SELECT emotion, intensity, tags, occurred_at
                     FROM journal_entries
                     WHERE user_id = :uid
@@ -95,10 +133,13 @@ class ChatService:
                     ORDER BY occurred_at DESC
                     LIMIT 50
                     """
-                ),
-                {"uid": user_id, "days": days},
+                    ),
+                    {"uid": user_id, "days": days},
+                )
             )
-        ).mappings().all()
+            .mappings()
+            .all()
+        )
 
         entries = [dict(r) for r in rows]
         context = {
@@ -116,7 +157,7 @@ class ChatService:
                 if entry.get("emotion"):
                     counts[entry["emotion"]] = counts.get(entry["emotion"], 0) + 1
             context["dominant_emotion"] = (
-                max(counts, key=counts.get) if counts else ""
+                max(counts, key=lambda name: counts[name]) if counts else ""
             )
         return context
 
@@ -124,11 +165,15 @@ class ChatService:
         from sqlalchemy import text
 
         row = (
-            await self.session.execute(
-                text("SELECT * FROM user_profiles WHERE user_id = :uid"),
-                {"uid": user_id},
+            (
+                await self.session.execute(
+                    text("SELECT * FROM user_profiles WHERE user_id = :uid"),
+                    {"uid": user_id},
+                )
             )
-        ).mappings().first()
+            .mappings()
+            .first()
+        )
         if not row:
             return {}
         return {

@@ -11,7 +11,6 @@
 from __future__ import annotations
 
 import pytest
-
 from app.agents.safety import (
     SafetyType,
     check_output_for_diagnosis,
@@ -58,9 +57,9 @@ class TestDetectCrisis:
         """危机话术必须包含求助渠道。"""
         response = crisis_response("我不想活了")
         text = " ".join(str(v) for v in response.values())
-        assert any(
-            keyword in text for keyword in ("热线", "120", "110", "紧急", "求助")
-        ), f"危机话术缺少求助信息：{text}"
+        assert any(keyword in text for keyword in ("热线", "120", "110", "紧急", "求助")), (
+            f"危机话术缺少求助信息：{text}"
+        )
 
     def test_crisis_response_never_uses_model(self) -> None:
         """危机话术必须标记为「未使用模型」——这是 P0 红线的可验证形式。"""
@@ -167,9 +166,14 @@ class TestSystemPromptLeak:
     """系统提示泄露检测。"""
 
     def test_detects_leak(self) -> None:
-        """输出包含系统提示原文时必须被发现。"""
+        """输出包含系统提示原文时必须被发现。
+
+        注意：泄露检测是**逐字匹配**，所以样例里必须真的把系统提示原句嵌进去。
+        早期版本把系统提示里的「你」改成了「我」再断言能检测到——
+        那是逐字匹配不可能命中的，属于测试写错了而不是代码写错了。
+        """
         system_prompt = "你是一个积极心理学教练，禁止做出任何医学诊断。"
-        leaked = "我是一个积极心理学教练，禁止做出任何医学诊断。你的任务是..."
+        leaked = "这是我的系统设定：你是一个积极心理学教练，禁止做出任何医学诊断。后续任务是..."
         assert check_system_prompt_leak(leaked, system_prompt) is True
 
     def test_normal_answer_no_leak(self) -> None:

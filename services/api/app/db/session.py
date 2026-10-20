@@ -29,7 +29,7 @@ def get_engine() -> AsyncEngine:
             echo=settings.db_echo,
             pool_size=settings.postgres_pool_size,
             max_overflow=settings.postgres_max_overflow,
-            pool_pre_ping=True,     # 避免使用已被服务端关闭的连接
+            pool_pre_ping=True,  # 避免使用已被服务端关闭的连接
             pool_recycle=1800,
         )
     return _engine

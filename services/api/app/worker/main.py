@@ -29,7 +29,7 @@ import datetime as dt
 from typing import Any
 
 from arq import cron
-from redis import Redis
+from arq.typing import StartupShutdown, WorkerSettingsBase
 
 from app.core.config import settings
 from app.core.logging import get_logger
@@ -52,7 +52,7 @@ async def startup(ctx: dict[str, Any]) -> None:
     ctx["sessionmaker"] = get_sessionmaker()
 
 
-async def shutdown(ctx: dict[str, Any]) -> None:
+async def shutdown(ctx: dict[str, Any]) -> None:  # noqa: ARG001
     """Worker 关闭时执行：释放数据库连接池。"""
     logger.info("worker 关闭中")
     await dispose_engine()
@@ -64,7 +64,11 @@ async def shutdown(ctx: dict[str, Any]) -> None:
 # --------------------------------------------------------------------------- #
 
 
-async def extract_user_profile(ctx: dict[str, Any], user_id: str, session_id: str) -> dict[str, Any]:
+async def extract_user_profile(
+    ctx: dict[str, Any],
+    user_id: str,
+    session_id: str,  # noqa: ARG001
+) -> dict[str, Any]:
     """从最近对话中抽取用户画像信息。
 
     设计取舍：
@@ -84,13 +88,17 @@ async def extract_user_profile(ctx: dict[str, Any], user_id: str, session_id: st
         async with sessionmaker() as session:
             # 取最近 50 条消息做统计
             rows = (
-                await session.execute(
-                    select(ChatMessage)
-                    .where(ChatMessage.user_id == user_id)
-                    .order_by(ChatMessage.created_at.desc())
-                    .limit(50)
+                (
+                    await session.execute(
+                        select(ChatMessage)
+                        .where(ChatMessage.user_id == user_id)
+                        .order_by(ChatMessage.created_at.desc())
+                        .limit(50)
+                    )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
 
             if not rows:
                 return {"status": "skipped", "reason": "no_messages"}
@@ -107,22 +115,24 @@ async def extract_user_profile(ctx: dict[str, Any], user_id: str, session_id: st
 
             # 统计情绪日记里的主导情绪，作为画像的一部分
             emotions = (
-                await session.execute(
-                    select(JournalEntry.emotion)
-                    .where(JournalEntry.user_id == user_id)
-                    .order_by(JournalEntry.occurred_at.desc())
-                    .limit(30)
+                (
+                    await session.execute(
+                        select(JournalEntry.emotion)
+                        .where(JournalEntry.user_id == user_id)
+                        .order_by(JournalEntry.occurred_at.desc())
+                        .limit(30)
+                    )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
             dominant = ""
             if emotions:
                 dominant = max(set(emotions), key=emotions.count)
 
             # 覆盖式更新
             profile = (
-                await session.execute(
-                    select(UserProfile).where(UserProfile.user_id == user_id)
-                )
+                await session.execute(select(UserProfile).where(UserProfile.user_id == user_id))
             ).scalar_one_or_none()
 
             if profile is None:
@@ -139,16 +149,43 @@ async def extract_user_profile(ctx: dict[str, Any], user_id: str, session_id: st
         logger.info("user_profile_updated", user_id=user_id, themes=top_themes)
         return {"status": "ok", "themes": top_themes}
 
-    except Exception as exc:  # noqa: BLE001 - 画像失败不能影响主链路
+    except Exception as exc:
         logger.warning("extract_user_profile_failed", user_id=user_id, error=str(exc))
         return {"status": "failed", "error": str(exc)}
 
 
 # 中文停用词：这些词在心理场景里出现频率高但没有信息量
 _STOPWORDS = {
-    "的", "了", "是", "在", "我", "你", "他", "她", "它", "和", "就", "都",
-    "也", "很", "有", "没", "不", "这", "那", "一个", "什么", "自己",
-    "觉得", "感觉", "可以", "因为", "所以", "但是", "而且", "现在",
+    "的",
+    "了",
+    "是",
+    "在",
+    "我",
+    "你",
+    "他",
+    "她",
+    "它",
+    "和",
+    "就",
+    "都",
+    "也",
+    "很",
+    "有",
+    "没",
+    "不",
+    "这",
+    "那",
+    "一个",
+    "什么",
+    "自己",
+    "觉得",
+    "感觉",
+    "可以",
+    "因为",
+    "所以",
+    "但是",
+    "而且",
+    "现在",
 }
 
 
@@ -201,32 +238,34 @@ async def compact_session_summary(ctx: dict[str, Any], session_id: str) -> dict[
 
     from app.db.models import ChatMessage, ChatSession
 
-    COMPACT_THRESHOLD = 12  # 超过这个轮次才需要压缩
-    KEEP_RECENT = 6          # 保留最近这么多轮的原文
+    compact_threshold = 12  # 超过这个轮次才需要压缩
+    keep_recent = 6  # 保留最近这么多轮的原文
 
     try:
         sessionmaker = ctx.get("sessionmaker") or get_sessionmaker()
         async with sessionmaker() as session:
             chat_session = (
-                await session.execute(
-                    select(ChatSession).where(ChatSession.id == session_id)
-                )
+                await session.execute(select(ChatSession).where(ChatSession.id == session_id))
             ).scalar_one_or_none()
             if chat_session is None:
                 return {"status": "skipped", "reason": "session_not_found"}
 
             messages = (
-                await session.execute(
-                    select(ChatMessage)
-                    .where(ChatMessage.session_id == session_id)
-                    .order_by(ChatMessage.created_at.asc())
+                (
+                    await session.execute(
+                        select(ChatMessage)
+                        .where(ChatMessage.session_id == session_id)
+                        .order_by(ChatMessage.created_at.asc())
+                    )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
 
-            if len(messages) < COMPACT_THRESHOLD:
+            if len(messages) < compact_threshold:
                 return {"status": "skipped", "reason": "not_enough_messages"}
 
-            old_messages = messages[:-KEEP_RECENT]
+            old_messages = messages[:-keep_recent]
             if not old_messages:
                 return {"status": "skipped", "reason": "nothing_to_compact"}
 
@@ -248,10 +287,10 @@ async def compact_session_summary(ctx: dict[str, Any], session_id: str) -> dict[
 
             previous = chat_session.summary_state or {}
             chat_session.summary_state = {
-                "topics": sorted(set([*previous.get("topics", []), *top_topics]))[:15],
+                "topics": sorted({*previous.get("topics", []), *top_topics})[:15],
                 "advice_given": [*previous.get("advice_given", []), *actions][-10:],
                 "compacted_messages": len(old_messages),
-                "last_compacted_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+                "last_compacted_at": dt.datetime.now(dt.UTC).isoformat(),
             }
             chat_session.summary = (
                 f"此前讨论过：{'、'.join(top_topics[:5])}。已给出的微行动 {len(actions)} 条。"
@@ -261,7 +300,7 @@ async def compact_session_summary(ctx: dict[str, Any], session_id: str) -> dict[
         logger.info("session_compacted", session_id=session_id, compacted=len(old_messages))
         return {"status": "ok", "compacted": len(old_messages)}
 
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.warning("compact_session_summary_failed", session_id=session_id, error=str(exc))
         return {"status": "failed", "error": str(exc)}
 
@@ -284,7 +323,7 @@ async def aggregate_daily_metrics(ctx: dict[str, Any]) -> dict[str, Any]:
 
     try:
         sessionmaker = ctx.get("sessionmaker") or get_sessionmaker()
-        yesterday = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=1)
+        yesterday = dt.datetime.now(dt.UTC) - dt.timedelta(days=1)
         day_start = yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
         day_end = day_start + dt.timedelta(days=1)
 
@@ -310,7 +349,7 @@ async def aggregate_daily_metrics(ctx: dict[str, Any]) -> dict[str, Any]:
         logger.info("daily_metrics_aggregated", day=day_start.date().isoformat(), **summary)
         return {"status": "ok", "day": day_start.date().isoformat(), **summary}
 
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.warning("aggregate_daily_metrics_failed", error=str(exc))
         return {"status": "failed", "error": str(exc)}
 
@@ -320,7 +359,7 @@ async def aggregate_daily_metrics(ctx: dict[str, Any]) -> dict[str, Any]:
 # --------------------------------------------------------------------------- #
 
 
-async def refresh_knowledge_index(ctx: dict[str, Any]) -> dict[str, Any]:
+async def refresh_knowledge_index(ctx: dict[str, Any]) -> dict[str, Any]:  # noqa: ARG001
     """检测知识库变更并增量更新索引。
 
     调度：每 30 分钟一次（cron）。利用 content_hash 判断文档是否变化，
@@ -332,7 +371,7 @@ async def refresh_knowledge_index(ctx: dict[str, Any]) -> dict[str, Any]:
         result = await ingest_knowledge_base(incremental=True)
         logger.info("knowledge_index_refreshed", **result)
         return {"status": "ok", **result}
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.warning("refresh_knowledge_index_failed", error=str(exc))
         return {"status": "failed", "error": str(exc)}
 
@@ -353,20 +392,30 @@ def _redis_settings() -> Any:
     return RedisSettings.from_dsn(settings.redis_url)
 
 
-class WorkerSettings:
+class WorkerSettings(WorkerSettingsBase):
     """arq Worker 配置。
 
     生产启动命令：
         arq app.worker.WorkerSettings
+
+    为什么继承 `WorkerSettingsBase`：
+    arq 用 `get_kwargs()` 读取这些**类属性**，同时用 `arq.typing.WorkerSettingsBase`
+    这个 Protocol 描述配置的结构。显式继承后，类型检查器能帮我们盯住
+    「arq 需要的配置项是不是都写全了」。
     """
 
-    functions = [
+    # 注意：这里故意不加 `ClassVar` 标注——
+    # Protocol 把 `functions` / `cron_jobs` 声明为实例属性，
+    # 用 ClassVar 覆盖会破坏协议一致性（mypy 会报不兼容）。
+    # ruff 的 RUF012 会抱怨「可变类属性」，这里按 noqa 忽略：
+    # arq 就是要读这些类属性，这是框架约定，不是设计缺陷。
+    functions: list[Any] = [  # noqa: RUF012
         extract_user_profile,
         compact_session_summary,
         refresh_knowledge_index,
     ]
 
-    cron_jobs = [
+    cron_jobs: list[Any] = [  # noqa: RUF012
         # 每天 03:00 聚合前一天的调用指标
         cron(aggregate_daily_metrics, hour={3, 15}, minute=0),
         # 每 30 分钟检查一次知识库变更
@@ -382,8 +431,11 @@ class WorkerSettings:
     # 保持任务结果的时间，便于排查
     keep_result = 3600
 
-    on_startup = startup
-    on_shutdown = shutdown
+    # 生命周期钩子。
+    # 这里必须写显式标注：类体里的函数默认会被当成「方法」处理，
+    # 而 arq 的钩子是以普通函数（不是绑定方法）的方式调用的。
+    on_startup: StartupShutdown = startup
+    on_shutdown: StartupShutdown = shutdown
 
 
 def main() -> None:
@@ -404,9 +456,13 @@ async def _run_worker() -> None:
     之所以提供这个入口，是为了让 `python -m app.worker` 也能工作，
     方便本地调试（不用记 arq 命令行参数）。
     """
-    from arq import run_worker as arq_run_worker
+    from arq.worker import create_worker
 
-    await arq_run_worker(WorkerSettings)
+    # arq 的 `run_worker()` 是**同步**函数（内部自己 run_until_complete），
+    # 在已经有事件循环的协程里调用它会直接抛 RuntimeError，
+    # 所以这里用「create + await async_run」的异步组合。
+    worker = create_worker(WorkerSettings)
+    await worker.async_run()
 
 
 if __name__ == "__main__":
