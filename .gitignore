@@ -1,0 +1,288 @@
+# ============================================================
+# Lumina · 忽略规则
+# 原则：凡��"不可再生"或"含用户隐私"的文件一律不进 Git；
+#      凡"体积大/可重建"的产物一律用 LFS 或走 CI 制品库。
+# ============================================================
+
+# ---------- 密钥与凭据（最高优先级，永不提交） ----------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+secrets.*.yaml
+**/credentials.json
+**/service-account*.json
+.aws/
+.gcp/
+.vscode/launch.json
+kubeconfig
+kubeconfig.*
+k8s/secrets/
+
+# ---------- 模型产物：权重与适配器体积巨大，托管在 HF/ModelScope ----------
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.gguf
+*.ggml
+adapters/
+checkpoints/
+lora_out/
+sft_out/
+model_weights/
+!packages/models/.gitkeep
+
+# 向量库与索引快照（可由 ingest 脚本重建）
+*.index
+*.faiss
+*.pkl
+*.npy
+*.npz
+chroma_db/
+faiss_index/
+qdrant_storage/
+
+# ---------- 数据与数据集：原始数据 / 用户隐私 / 评测产物 ----------
+data/raw/
+data/uploads/
+data/backups/
+data/tmp/
+datasets/derived/
+packages/datasets/golden/*.private.*
+packages/datasets/golden/**/raw_*
+packages/datasets/real_user/
+packages/datasets/personal/
+eval_results/
+eval_runs/
+reports/eval/
+**/*.parquet
+**/*.jsonl.gz
+!packages/datasets/golden/*.jsonl
+!packages/datasets/golden/sample_*.json
+
+# 数据库与中间件本地数据
+pgdata/
+postgres-data/
+redis-data/
+mysql-data/
+mongo-data/
+*.sqlite
+*.sqlite3
+*.db
+
+# ---------- 内部文档（不对外公开） ----------
+docs/_internal/
+docs/_drafts/
+docs/roadmap-private.md
+**/*-PRIVATE.md
+*.local.md
+
+# ---------- 个人私有材料（仅本地，勿入库） ----------
+# 这些是个人工作笔记与项目外的个人材料，与本仓库的产品无关，
+# 统一排除，避免把工作环境之外的私人内容带进公开仓库。
+notes/
+notes-*/
+my-notes/
+personal/
+private/
+career/
+workspace/
+*.private/
+*.private.md
+**/private/**
+**/personal/**
+**/notes/**
+**/notes-*/
+resume*.md
+resume*.pdf
+resume*.docx
+cv*.md
+cv*.pdf
+interview*.md
+interview*.pdf
+notes-*.md
+todo*.md
+TODO*.md
+*.todo.md
+schedule*.md
+
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+pip-wheel-metadata/
+
+# 虚拟环境
+.venv/
+venv/
+env/
+ENV/
+.python-version.local
+
+# 测试与类型检查缓存
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.dmypy.json
+dmypy.json
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.hypothesis/
+.tox/
+.nox/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ---------- Node / 前端 ----------
+node_modules/
+.pnpm-store/
+.yarn/cache
+.yarn/install-state.gz
+.pnpm-debug.log*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+*.tgz
+.eslintcache
+.stylelintcache
+.swc/
+.turbo/
+.nx/
+lerna-debug.log*
+
+# 构建产物
+dist/
+build/
+out/
+.next/
+.nuxt/
+.output/
+.taro/
+.temp/
+.swc/
+unpackage/
+
+# 本地环境覆盖
+.env.local
+.env.*.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.local.yaml
+*.local.yml
+*.local.json
+!apps/miniapp/project.config.json
+
+# ---------- 日志与运行时 ----------
+logs/
+*.log
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# ---------- 缓存 ----------
+.cache/
+.temp/
+.tmp/
+.temp/
+.cache/
+storage/framework/cache/
+
+# ---------- 编辑器 / IDE ----------
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
+*.swp
+*.swo
+*~
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ---------- 操作系统 / 工具 ----------
+.dS_Store.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+
+# 临时脚本与个人笔记
+scratch/
+tmp/
+_playground/
+.scripts-local/
+my-notes/
+*.scratch.md
+
+# ---------- 测试产物与覆盖率 ----------
+coverage/
+coverage-final.json
+lcov.info
+*.lcov
+.nyc_output/
+
+# ---------- 大文件与 LFS ----------
+*.mp4
+*.mov
+*.psd
+*.ai
+*.sketch
+# 大文本/二进制走 LFS，请改用：git lfs track "*.bin" 后再移除下面这行
+# （已在上方 *.bin 覆盖，此处保留说明）
+
+# ---------- 安全工具 ----------
+.gitleaks.toml.local
+.semgrep/
+.snyk
+
+# ---------- 临时导出 ----------
+export/
+exports/
+*.csv
+*.xlsx
+*.pdf
+!docs/**/*.pdf

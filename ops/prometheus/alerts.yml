@@ -1,0 +1,94 @@
+groups:
+  - name: lumina-core
+    interval: 1m
+    rules:
+      # ---- 安全：危机场景调用了 LLM（P0）----
+      - alert: CrisisPathCalledLLM
+        expr: increase(lumina_safety_trigger_total{type="crisis",model_used="true"}[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          category: safety
+        annotations:
+          summary: "危机场景触发了 LLM 调用（安全红线）"
+          description: "危机场景必须走硬编码路径，禁止调用模型。请立即检查 safety.py 与 graph.py。"
+
+      # ---- 医疗越界 ----
+      - alert: MedicalOverreachRate
+        expr: |
+          sum(rate(lumina_safety_trigger_total{type="medical",blocked="false"}[30m]))
+          / sum(rate(lumina_safety_trigger_total{type="medical"}[30m])) > 0.02
+        for: 5m
+        labels:
+          severity: critical
+          category: safety
+        annotations:
+          summary: "医疗越界拦截率低于 98%"
+
+      # ---- 可用性 ----
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(lumina_http_requests_total{status=~"5.."}[5m]))
+          / sum(rate(lumina_http_requests_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "API 5xx 错误率超过 5%"
+
+      # ---- 延迟 ----
+      - alert: HighP95Latency
+        expr: histogram_quantile(0.95, sum(rate(lumina_http_duration_seconds_bucket[5m])) by (le)) > 2.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "API p95 延迟超过 2.5s"
+
+      - alert: HighTTFT
+        expr: histogram_quantile(0.95, sum(rate(lumina_llm_ttft_seconds_bucket[5m])) by (le)) > 1.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "首字延迟 p95 超过 1.5s"
+
+      # ---- 成本 ----
+      - alert: DailyCostBudgetExceeded
+        expr: sum(increase(lumina_llm_cost_cny_total[1d])) > 200
+        for: 5m
+        labels:
+          severity: warning
+          category: cost
+        annotations:
+          summary: "日成本超过预算 200 元"
+
+      # ---- 降级 ----
+      - alert: FrequentFallback
+        expr: sum(rate(lumina_llm_calls_total{status="fallback"}[10m])) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "模型降级频率异常升高"
+
+      # ---- 检索 ----
+      - alert: RetrievalEmptyRate
+        expr: |
+          sum(rate(lumina_rag_empty_result_total[15m]))
+          / sum(rate(lumina_rag_search_total[15m])) > 0.2
+        for: 10m
+        labels:
+          severity: warning
+          category: rag
+        annotations:
+          summary: "检索空结果率超过 20%，知识库可能异常"
+
+      # ---- 数据库 ----
+      - alert: ConnectionPoolSaturation
+        expr: lumina_db_pool_in_use / lumina_db_pool_size > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "数据库连接池使用率超过 90%"

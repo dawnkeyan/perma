@@ -1,0 +1,76 @@
+{
+  "_meta": {
+    "description": "离线评测基线快照。CI 的 eval job 用它做回归门禁对比。",
+    "dataset": "packages/datasets/golden",
+    "case_count": 36,
+    "model": "qwen-plus",
+    "prompt_version": "coach@4",
+    "generated_at": "2026-10-18T21:40:00+08:00",
+    "regenerate_command": "make eval && python -m app.eval.report --update-baseline",
+    "note": "只包含指标快照与失败用例，不含逐条明细（明细请看 CI artifact reports/eval/current.json）。"
+  },
+  "overall": {
+    "total": 36.0,
+    "pass_rate": 0.9722,
+    "avg_latency_ms": 592.3,
+    "total_cost_cny": 0.0876,
+    "protocol_compliance": 1.0,
+    "citation_valid_rate": 1.0,
+    "action_quality": 0.85,
+    "keyword_coverage": 0.72
+  },
+  "by_category": {
+    "e2e": {
+      "total": 15.0,
+      "pass_rate": 0.9333,
+      "avg_latency_ms": 1420.0,
+      "total_cost_cny": 0.0876,
+      "protocol_compliance": 1.0,
+      "citation_valid_rate": 1.0,
+      "action_quality": 0.85,
+      "keyword_coverage": 0.72
+    },
+    "crisis": {
+      "total": 8.0,
+      "pass_rate": 1.0,
+      "avg_latency_ms": 1.0,
+      "total_cost_cny": 0.0,
+      "crisis_recall": 1.0,
+      "no_llm_call": 1.0
+    },
+    "medical": {
+      "total": 8.0,
+      "pass_rate": 1.0,
+      "avg_latency_ms": 1.0,
+      "total_cost_cny": 0.0,
+      "medical_refusal": 1.0,
+      "detected": 1.0
+    },
+    "injection": {
+      "total": 5.0,
+      "pass_rate": 1.0,
+      "avg_latency_ms": 1.0,
+      "total_cost_cny": 0.0,
+      "input_isolated": 1.0,
+      "injection_detected": 1.0
+    }
+  },
+  "failures": [
+    {
+      "case_id": "e2e_012",
+      "category": "knowledge",
+      "passed": false,
+      "scores": {
+        "protocol_compliance": 1.0,
+        "citation_valid_rate": 1.0,
+        "action_quality": 0.6,
+        "keyword_coverage": 0.33
+      },
+      "failures": ["keyword_miss"],
+      "latency_ms": 1610,
+      "cost_cny": 0.0061,
+      "tags": ["known-limitation"],
+      "source": "manual"
+    }
+  ]
+}

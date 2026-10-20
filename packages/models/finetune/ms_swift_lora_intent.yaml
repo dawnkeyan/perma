@@ -1,0 +1,111 @@
+# ms-swift · 意图识别 LoRA 微调配置
+#
+# 用法（需要 GPU 环境）：
+#   1. pip install -U ms-swift
+#   2. swift sft --config packages/models/finetune/ms_swift_lora_intent.yaml
+#
+# 为什么选 ms-swift 而不是 LLaMA-Factory：
+#   - 阿里通义千问团队维护，对 Qwen 系列支持最完整
+#   - 与 ModelScope（魔搭）深度集成：数据集可直接放魔搭，产物可一键推送
+#   - LoRA / 全参 / 量化微调配置风格统一，上手成本低
+#
+# 备选方案见同目录 llamafactory_lora_intent.yaml
+
+# ------------------------------------------------------------------ #
+# 模型
+# ------------------------------------------------------------------ #
+# 基座模型：1.5B 是「够用且便宜」的选择。
+# 意图分类任务对参数量要求不高，1.5B 在 8G 显存上就能训 LoRA。
+model: Qwen/Qwen2.5-1.5B-Instruct
+
+# 训练方式：lora 只训练低秩增量，显存占用约为全参的 1/4
+train_type: lora
+
+# LoRA 超参
+#   r=16：在表达力与过拟合风险之间的经验平衡点，心理学意图任务够用
+#   lora_alpha=32：缩放系数，一般设为 r 的 2 倍
+#   lora_dropout=0.05：轻微正则化
+lora_rank: 16
+lora_alpha: 32
+lora_dropout: 0.05
+# 只对注意力的投影矩阵做 LoRA，效果最好且参数最少
+target_modules: all-linear
+
+# ------------------------------------------------------------------ #
+# 数据
+# ------------------------------------------------------------------ #
+# 由 packages/models/scripts/build_dataset.py 生成
+dataset:
+  - data/sft/train.jsonl
+val_dataset:
+  - data/sft/val.jsonl
+
+# 数据格式：ms-swift 的 messages 格式
+#   {"messages": [{"role": "system", ...}, {"role": "user", ...}, {"role": "assistant", ...}]}
+dataset_num_proc: 8
+
+# 截断长度：意图分类的输入很短，1024 足够，避免无谓的显存与算力浪费
+max_length: 1024
+
+# ------------------------------------------------------------------ #
+# 训练超参
+# ------------------------------------------------------------------ #
+# 单卡 batch size。显存不够时调小并用 gradient_accumulation_steps 补齐
+per_device_train_batch_size: 8
+
+# 梯度累积：有效 batch = 8 * 4 * 2 = 64
+# 小 batch + 累积比大 batch 稳定，也更省显存
+gradient_accumulation_steps: 4
+
+# 学习率：LoRA 常用 1e-4 ~ 2e-4，比全参微调高一个数量级
+learning_rate: 1.0e-4
+
+# 权重衰减，防止过拟合
+weight_decay: 0.01
+
+# 预热步数占总步数的比例，前 10% 步用线性升温，避免初期梯度震荡
+warmup_ratio: 0.1
+
+# 学习率调度器
+lr_scheduler_type: cosine
+
+# 训练轮数。意图分类任务数据量通常在几千条以内，3 轮足够
+num_train_epochs: 3
+
+# 梯度裁剪，防止梯度爆炸
+max_grad_norm: 1.0
+
+# 混合精度
+bf16: true
+
+# 每 50 步打印一次 loss，每 100 步保存一次检查点
+logging_steps: 50
+save_steps: 100
+
+# 验证：每 100 步跑一次验证集，评估准确率
+eval_steps: 100
+# 保留 3 个检查点，磁盘占用可控
+save_total_limit: 3
+
+# 种子固定，保证可复现
+seed: 42
+
+# 早停：验证集 loss 连续 3 次不下降就停，防止过拟合
+# （ms-swift 通过 early_stopping 回调实现）
+
+# ------------------------------------------------------------------ #
+# 输出
+# ------------------------------------------------------------------ #
+# 训练产物目录，训练完成后由 push_to_modelscope.py 推送到魔搭
+output_dir: output/lumina-intent-lora
+
+# 训练完成后把 LoRA 权重合并进基座模型，便于 vLLM 直接加载
+# 合并后是一个完整模型目录，vllm serve <dir> 即可
+merge_lora: true
+
+# ------------------------------------------------------------------ #
+# 评测
+# ------------------------------------------------------------------ #
+# 训练结束自动在验证集上算准确率
+# 与线上的意图识别评测口径一致，便于对比
+eval_metric: accuracy

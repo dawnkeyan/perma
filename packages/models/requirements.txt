@@ -1,0 +1,27 @@
+# ModelScope 与微调相关依赖
+#
+# 安装：
+#   pip install -r packages/models/requirements.txt
+#
+# 说明：
+#   - 这些依赖**不是 API 服务的运行时依赖**，只在执行模型相关脚本时需要
+#   - API 服务通过 OpenAI 兼容协议访问 vLLM，不需要装 modelscope
+#   - 单独放在这里，避免污染 services/api 的依赖树
+
+# ModelScope SDK：拉取/推送模型、登录、模型仓库操作
+modelscope>=1.18.0
+
+# ms-swift：微调框架（阿里通义千问团队维护，Qwen 生态最好）
+# 装完整版体积较大，仅需 LoRA 时可用 ms-swift[llm] 精简依赖
+ms-swift>=3.0.0
+
+# 向量数据库客户端：本地跑微调评测时需要
+transformers>=4.44.0
+datasets>=2.20.0
+accelerate>=0.33.0
+peft>=0.12.0
+trl>=0.9.0
+
+# 评测
+scikit-learn>=1.5.0
+scipy>=1.14.0

@@ -1,0 +1,59 @@
+name: Bug 报告
+description: 报告一个可复现的问题
+labels: ["bug", "需要复现"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。请尽量提供可复现的信息，这能大幅缩短定位时间。
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 发生了什么
+      description: 期望的行为 vs 实际的行为
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: input
+    id: trace-id
+    attributes:
+      label: Trace ID
+      description: 响应头 X-Trace-Id 或错误响应中的 trace_id
+    validations:
+      required: false
+
+  - type: dropdown
+    id: feature
+    attributes:
+      label: 涉及功能
+      options:
+        - 情绪打卡
+        - AI 对话
+        - 认知重构
+        - 优势测评
+        - 成长时间线
+        - 账号与隐私
+        - 其他
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 相关日志
+      description: 前后端日志片段，注意脱敏
+      render: shell
+    validations:
+      required: false

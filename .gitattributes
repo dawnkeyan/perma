@@ -1,0 +1,29 @@
+# 文本文件统一 LF
+* text=auto eol=lf
+
+*.py    text diff=python
+*.ts    text diff=typescript
+*.tsx   text diff=typescript
+*.js    text diff=javascript
+*.json  text
+*.md    text
+*.yml   text
+*.yaml  text
+*.toml  text
+*.sh    text eol=lf
+Dockerfile text
+
+# 二进制资源不做 diff / 不做行尾转换
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.webp  binary
+*.ico   binary
+*.pdf   binary
+*.zip   binary
+*.gz    binary
+
+# 大模型权重走 LFS（需手动执行：git lfs track）
+*.safetensors filter=lfs diff=lfs merge=lfs -text
+*.gguf      filter=lfs diff=lfs merge=lfs -text

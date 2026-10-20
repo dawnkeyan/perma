@@ -1,0 +1,90 @@
+# Lumina · OpenTelemetry Collector 配置
+#
+# 链路：API/Worker --(OTLP gRPC)--> Collector --(metrics)--> Prometheus
+#                                           --(logs)--> Loki（若已部署）
+#                                           --(traces)--> Tempo（若已部署）
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # 批处理：降低导出开销
+  batch:
+    timeout: 5s
+    send_batch_size: 512
+    send_batch_max_size: 1024
+
+  # 内存保护：超过 limit 直接丢弃 span 而不是把 Collector 打挂
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 80
+    spike_limit_percentage: 20
+
+  # 为所有 span 补充部署环境与版本标签
+  resource:
+    attributes:
+      - key: deployment.environment
+        value: ${env:DEPLOY_ENV}
+        action: upsert
+      - key: service.version
+        value: ${env:SERVICE_VERSION}
+        action: upsert
+      - key: service.name
+        value: lumina-api
+        action: upsert
+
+  # 脱敏：防止用户原话进入链路系统
+  attributes/scrub:
+    actions:
+      - key: llm.prompt
+        action: delete
+      - key: llm.completion
+        action: delete
+      - key: user.message
+        action: delete
+      - key: db.statement
+        action: delete
+
+exporters:
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    resource_to_telemetry_conversion:
+      enabled: true
+
+  debug:
+    verbosity: basic
+
+  otlphttp/tempo:
+    endpoint: http://tempo:4318
+    tls:
+      insecure: true
+
+  otlphttp/loki:
+    endpoint: http://loki:3100/otlp
+
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [prometheus, debug]
+
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, attributes/scrub, batch]
+      exporters: [otlphttp/tempo, debug]
+
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, attributes/scrub, batch]
+      exporters: [otlphttp/loki, debug]
+
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      level: basic

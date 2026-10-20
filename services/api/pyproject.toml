@@ -1,0 +1,162 @@
+[project]
+name = "lumina-api"
+version = "0.1.0"
+description = "Lumina 拾光 · 积极心理学 AI 情绪教练后端"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+
+dependencies = [
+    # web
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "sse-starlette>=2.1.3",
+    "python-multipart>=0.0.12",
+    # 校验与配置
+    "pydantic>=2.9.0",
+    "pydantic-settings>=2.6.0",
+    "email-validator>=2.2.0",
+    # 数据层
+    "sqlalchemy[asyncio]>=2.0.36",
+    "asyncpg>=0.30.0",
+    "psycopg[binary]>=3.2.3",
+    "alembic>=1.14.0",
+    "pgvector>=0.3.6",
+    "redis>=5.2.0",
+    "arq>=0.26.3",
+    # LLM 与编排
+    "langgraph>=0.2.45",
+    "langchain-core>=0.3.15",
+    "openai>=1.57.0",
+    "tiktoken>=0.8.0",
+    "httpx>=0.28.0",
+    "tenacity>=9.0.0",
+    # 检索
+    "jieba>=0.42.1",
+    "numpy>=2.1.0",
+    "elasticsearch[async]>=8.15.0",
+    # 模板与配置
+    "jinja2>=3.1.4",
+    "pyyaml>=6.0.2",
+    "python-dotenv>=1.0.1",
+    # 安全
+    "pyjwt>=2.9.0",
+    "cryptography>=43.0.0",
+    # 观测
+    "structlog>=24.4.0",
+    "prometheus-client>=0.21.0",
+    "opentelemetry-api>=1.27.0",
+    "opentelemetry-sdk>=1.27.0",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.27.0",
+    "opentelemetry-instrumentation-fastapi>=0.48b0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.3",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+    "pytest-mock>=3.14.0",
+    "respx>=0.21.1",
+    "ruff>=0.8.0",
+    "mypy>=1.13.0",
+    "types-pyyaml>=6.0.12",
+    "types-redis>=4.6.0",
+    "pre-commit>=4.0.1",
+    "ipython>=8.30.0",
+]
+eval = [
+    "ragas>=0.2.0",
+    "datasets>=3.0.0",
+    "evaluate>=0.4.2",
+]
+train = [
+    "torch>=2.5.0",
+    "peft>=0.13.2",
+    "transformers>=4.47.0",
+    "trl>=0.12.0",
+    "datasets>=3.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["app"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",      # pycodestyle
+    "F",           # pyflakes
+    "I",           # isort
+    "N",           # pep8-naming
+    "UP",          # pyupgrade
+    "B",           # bugbear
+    "C4",          # comprehensions
+    "SIM",         # simplify
+    "ASYNC",       # asyncio
+    "ARG",         # unused arguments
+    "PTH",         # pathlib
+    "RUF",
+]
+ignore = [
+    "E501",    # 行宽由 formatter 控制
+    "B008",    # FastAPI Depends 惯用法
+    "N818",    # 异常命名允许领域化
+    "RUF001",  # 中文全角标点
+    "RUF002",
+    "RUF003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["ARG", "S101"]
+"app/db/models.py" = ["N815"]
+"alembic/*" = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.12"
+plugins = ["pydantic.mypy"]
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+ignore_missing_imports = true
+exclude = ["alembic", "app/eval"]
+
+[[tool.mypy.overrides]]
+module = ["app.eval.*"]
+disallow_untyped_defs = false
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+    "integration: 需要外部依赖（DB/Redis）的集成测试",
+    "contract: OpenAPI 契约测试",
+    "eval: 评测相关测试",
+]
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.coverage.run]
+source = ["app"]
+branch = true
+omit = ["*/migrations/*", "*/alembic/*", "app/eval/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@overload",
+]

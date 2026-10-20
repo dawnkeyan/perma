@@ -1,0 +1,65 @@
+{
+  "name": "lumina-miniapp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Lumina 拾光 · 微信小程序",
+  "templateInfo": {
+    "name": "default",
+    "typescript": true,
+    "css": "sass",
+    "compiler": "webpack5"
+  },
+  "scripts": {
+    "dev:weapp": "taro build --type weapp --watch",
+    "build:weapp": "taro build --type weapp",
+    "build:h5": "taro build --type h5",
+    "build:alipay": "taro build --type alipay",
+    "dev:weapp:simulator": "npm run dev:weapp -- --simulator",
+    "lint": "eslint src --ext .ts,.tsx",
+    "format": "prettier --write \"src/**/*.{ts,tsx,scss}\"",
+    "typecheck": "tsc --noEmit"
+  },
+  "browserslist": {
+    "production": [">=0.25%", "not dead"],
+    "development": [
+      "last 3 chrome version",
+      "last 3 firefox version",
+      "last 3 safari version"
+    ]
+  },
+  "dependencies": {
+    "@tarojs/components": "4.0.9",
+    "@tarojs/helper": "4.0.9",
+    "@tarojs/plugin-framework-react": "4.0.9",
+    "@tarojs/plugin-platform-weapp": "4.0.9",
+    "@tarojs/react": "4.0.9",
+    "@tarojs/runtime": "4.0.9",
+    "@tarojs/shared": "4.0.9",
+    "@tarojs/taro": "4.0.9",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zustand": "^4.5.5"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.26.0",
+    "@babel/runtime": "^7.26.0",
+    "@tarojs/cli": "4.0.9",
+    "@tarojs/plugin-platform-alipay": "4.0.9",
+    "@tarojs/plugin-platform-h5": "4.0.9",
+    "@types/node": "^22.10.1",
+    "@types/react": "^18.3.12",
+    "@typescript-eslint/eslint-plugin": "^8.15.0",
+    "@typescript-eslint/parser": "^8.15.0",
+    "babel-preset-taro": "4.0.9",
+    "eslint": "^8.57.1",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-react": "^7.37.2",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "postcss": "^8.4.49",
+    "prettier": "^3.4.2",
+    "sass": "^1.83.0",
+    "stylelint": "^16.10.0",
+    "tsconfig-paths-webpack-plugin": "^4.2.0",
+    "typescript": "^5.6.3"
+  }
+}
