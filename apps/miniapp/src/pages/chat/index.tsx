@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ComponentRef } from 'react';
 import { View, Text, Input, Button, ScrollView } from '@tarojs/components';
-import Taro from '@tarojs/taro';
+import Taro, { useDidShow } from '@tarojs/taro';
 
 import { api, streamChat, type Citation, type StreamEvent } from '../../services/api';
+import { useChatStore } from '../../stores/chat';
 import { track } from '../../utils/track';
 
 interface Message {
@@ -29,13 +30,31 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
-  const scrollRef = useRef<ScrollView>(null);
+  /** 当前激活的工具；null = 普通对话。 */
+  const [activeTool, setActiveTool] = useState<{ id: string; name: string } | null>(null);
+  const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
   const abortRef = useRef<(() => void) | null>(null);
+  const consumePendingTool = useChatStore((state) => state.consumePendingTool);
 
   useEffect(() => {
     track('page_view', { page: 'chat' });
     return () => abortRef.current?.();
   }, []);
+
+  /**
+   * 消费首页传来的工具。
+   *
+   * 对话页在 tabBar 里，`switchTab` 不能带 query，
+   * 所以首页把工具放进 store，这里在页面每次显示时取一次（取完即清）。
+   */
+  useDidShow(() => {
+    const pending = consumePendingTool();
+    if (!pending) return;
+    setActiveTool({ id: pending.id, name: pending.name });
+    // 预填开场白而不是直接发送：给用户一次「改一改再问」的机会
+    setInput(pending.starterPrompt);
+    track('tool_activated', { tool_id: pending.id });
+  });
 
   const scrollToBottom = () => {
     setTimeout(() => scrollRef.current?.scrollTo({ scrollTop: 99999, duration: 200 }), 50);
@@ -62,7 +81,12 @@ export default function ChatPage() {
     let ttft = 0;
 
     abortRef.current = streamChat(
-      { session_id: getSessionId(), message: text },
+      {
+        session_id: getSessionId(),
+        message: text,
+        // 工具 id 透传给服务端：由服务端决定检索侧重与上下文范围
+        tool_id: activeTool?.id,
+      },
       (event: StreamEvent) => {
         switch (event.type) {
           case 'delta': {
@@ -148,9 +172,13 @@ export default function ChatPage() {
       >
         {messages.length === 0 && (
           <View className="chat-empty">
-            <Text className="chat-empty-title">想聊点什么都可以</Text>
+            <Text className="chat-empty-title">
+              {activeTool ? `正在使用「${activeTool.name}」` : '想聊点什么都可以'}
+            </Text>
             <Text className="chat-empty-sub">
-              今天的情绪、卡住的事、或者一个心理学方法
+              {activeTool
+                ? '开场白已经帮你填好，改成你自己的话再发送也可以'
+                : '今天的情绪、卡住的事、或者一个心理学方法'}
             </Text>
           </View>
         )}
@@ -159,7 +187,6 @@ export default function ChatPage() {
           <View key={msg.id} className={`msg msg-${msg.role}`}>
             {msg.role === 'assistant' && (
               <View className="msg-body">
-                {msg.sections?.empathy ? null : null}
                 <Text className="msg-text">
                   {msg.content || (msg.streaming ? '…' : '')}
                 </Text>
@@ -209,6 +236,15 @@ export default function ChatPage() {
           </View>
         ))}
       </ScrollView>
+
+      {activeTool && (
+        <View className="chat-tool-bar">
+          <Text className="chat-tool-name">{activeTool.name}</Text>
+          <Text className="chat-tool-exit" onClick={() => setActiveTool(null)}>
+            退出工具
+          </Text>
+        </View>
+      )}
 
       <View className="chat-input-bar">
         <Input

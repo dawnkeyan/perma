@@ -303,3 +303,437 @@ page {
     background: #d9d2ca;
   }
 }
+
+/* ---------- 首页 ---------- */
+.home-page {
+  padding: 32px 32px 0;
+}
+
+.home-greeting {
+  display: block;
+  font-size: 44px;
+  font-weight: 600;
+  color: $text;
+}
+
+.home-sub {
+  display: block;
+  margin-top: 8px;
+  font-size: 26px;
+  color: $sub;
+}
+
+.home-status-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: $card;
+  border-radius: 24px;
+  padding: 28px;
+  border: 2px solid $border;
+}
+
+.home-status-main {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex: 1;
+}
+
+.home-status-emoji {
+  font-size: 52px;
+  line-height: 1.1;
+}
+
+.home-status-text {
+  flex: 1;
+}
+
+.home-status-title {
+  display: block;
+  font-size: 30px;
+  font-weight: 600;
+  color: $text;
+}
+
+.home-status-sub {
+  display: block;
+  margin-top: 4px;
+  font-size: 24px;
+  color: $sub;
+}
+
+.home-status-link {
+  padding: 12px 24px;
+  border-radius: 32px;
+  background: #fdf6f2;
+}
+
+.home-status-link-text {
+  font-size: 24px;
+  color: $primary;
+}
+
+.section-desc {
+  display: block;
+  font-size: 24px;
+  color: $sub;
+  margin-bottom: 20px;
+}
+
+/* ---------- 工具卡片 ---------- */
+.tool-card {
+  background: $card;
+  border-radius: 24px;
+  border: 2px solid $border;
+  padding: 28px;
+  margin-bottom: 20px;
+}
+
+.tool-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.tool-icon {
+  font-size: 44px;
+  line-height: 1.2;
+}
+
+.tool-card-title-wrap {
+  flex: 1;
+}
+
+.tool-name {
+  display: block;
+  font-size: 32px;
+  font-weight: 600;
+  color: $text;
+}
+
+.tool-desc {
+  display: block;
+  margin-top: 8px;
+  font-size: 25px;
+  color: $sub;
+  line-height: 1.5;
+}
+
+.tool-arrow {
+  font-size: 36px;
+  color: $sub;
+  line-height: 1.2;
+}
+
+.tool-steps-toggle {
+  margin-top: 20px;
+}
+
+.tool-steps-toggle-text {
+  font-size: 24px;
+  color: $primary;
+}
+
+.tool-steps {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid $border;
+}
+
+.tool-step {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.tool-step-index {
+  width: 40px;
+  height: 40px;
+  line-height: 40px;
+  text-align: center;
+  border-radius: 50%;
+  background: #fdf6f2;
+  color: $primary;
+  font-size: 22px;
+}
+
+.tool-step-body {
+  flex: 1;
+}
+
+.tool-step-title {
+  display: block;
+  font-size: 27px;
+  font-weight: 600;
+  color: $text;
+}
+
+.tool-step-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 24px;
+  color: $sub;
+  line-height: 1.5;
+}
+
+.tool-empty {
+  background: $card;
+  border-radius: 24px;
+  padding: 32px;
+  text-align: center;
+  border: 2px solid $border;
+}
+
+.tool-empty-text {
+  font-size: 26px;
+  color: $sub;
+}
+
+/* ---------- 回顾 ---------- */
+.timeline-page {
+  padding: 32px 32px 0;
+}
+
+.timeline-stats {
+  display: flex;
+  gap: 16px;
+}
+
+.timeline-stat {
+  flex: 1;
+  background: $card;
+  border-radius: 20px;
+  padding: 24px 12px;
+  text-align: center;
+  border: 2px solid $border;
+}
+
+.timeline-stat-value {
+  display: block;
+  font-size: 40px;
+  font-weight: 600;
+  color: $primary;
+}
+
+.timeline-stat-label {
+  display: block;
+  margin-top: 6px;
+  font-size: 22px;
+  color: $sub;
+}
+
+.timeline-row {
+  background: $card;
+  border-radius: 20px;
+  padding: 24px;
+  margin-bottom: 16px;
+  border: 2px solid $border;
+}
+
+.timeline-row-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.timeline-day {
+  font-size: 28px;
+  font-weight: 600;
+  color: $text;
+}
+
+.timeline-entries {
+  font-size: 22px;
+  color: $sub;
+}
+
+.timeline-row-body {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.timeline-emoji {
+  font-size: 32px;
+}
+
+.timeline-emotion {
+  font-size: 26px;
+  color: $text;
+}
+
+.timeline-bar-wrap {
+  flex: 1;
+  height: 12px;
+  background: #f4f1ed;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.timeline-bar {
+  height: 100%;
+  background: $primary;
+  border-radius: 6px;
+}
+
+.timeline-intensity {
+  width: 48px;
+  text-align: right;
+  font-size: 24px;
+  color: $sub;
+}
+
+.timeline-empty {
+  background: $card;
+  border-radius: 24px;
+  padding: 48px 32px;
+  text-align: center;
+  border: 2px solid $border;
+}
+
+.timeline-empty-text {
+  display: block;
+  font-size: 28px;
+  color: $text;
+}
+
+.timeline-empty-sub {
+  display: block;
+  margin-top: 8px;
+  font-size: 24px;
+  color: $sub;
+}
+
+/* ---------- 我的 ---------- */
+.profile-page {
+  padding: 32px 32px 0;
+}
+
+.profile-header {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  background: $card;
+  border-radius: 24px;
+  padding: 28px;
+  border: 2px solid $border;
+}
+
+.profile-avatar {
+  font-size: 52px;
+}
+
+.profile-header-text {
+  flex: 1;
+}
+
+.profile-name {
+  display: block;
+  font-size: 32px;
+  font-weight: 600;
+  color: $text;
+}
+
+.profile-sub {
+  display: block;
+  margin-top: 4px;
+  font-size: 24px;
+  color: $sub;
+}
+
+.profile-stat-row {
+  display: flex;
+  gap: 16px;
+}
+
+.profile-stat {
+  flex: 1;
+  background: $card;
+  border-radius: 20px;
+  padding: 24px 12px;
+  text-align: center;
+  border: 2px solid $border;
+}
+
+.profile-stat-value {
+  display: block;
+  font-size: 40px;
+  font-weight: 600;
+  color: $primary;
+}
+
+.profile-stat-label {
+  display: block;
+  margin-top: 6px;
+  font-size: 22px;
+  color: $sub;
+}
+
+.profile-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: $card;
+  border-radius: 20px;
+  padding: 24px 28px;
+  margin-bottom: 12px;
+  border: 2px solid $border;
+}
+
+.profile-item-text {
+  flex: 1;
+}
+
+.profile-item-title {
+  display: block;
+  font-size: 28px;
+  color: $text;
+}
+
+.profile-item-sub {
+  display: block;
+  margin-top: 4px;
+  font-size: 23px;
+  color: $sub;
+}
+
+.profile-arrow {
+  font-size: 34px;
+  color: $sub;
+}
+
+.profile-notice {
+  background: #fdf6f2;
+  border-radius: 20px;
+  padding: 24px 28px;
+  margin-bottom: 16px;
+}
+
+.profile-notice-item {
+  display: block;
+  font-size: 24px;
+  color: $sub;
+  line-height: 1.7;
+}
+
+/* ---------- 对话页工具条 ---------- */
+.chat-tool-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  background: #fdf6f2;
+}
+
+.chat-tool-name {
+  font-size: 24px;
+  font-weight: 600;
+  color: $primary;
+}
+
+.chat-tool-exit {
+  font-size: 24px;
+  color: $sub;
+}

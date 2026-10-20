@@ -1,4 +1,5 @@
-import { useLaunch, useShow } from '@tarojs/taro';
+// 注意：Taro 的 React 版生命周期 hook 叫 useDidShow（不是 Vue 版的 useShow）
+import { useLaunch, useDidShow } from '@tarojs/taro';
 
 import { initAuth } from './services/auth';
 import { track } from './utils/track';
@@ -12,7 +13,7 @@ function App() {
     track('app_launch', {});
   });
 
-  useShow(() => {
+  useDidShow(() => {
     track('app_show', {});
   });
 
