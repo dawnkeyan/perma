@@ -34,6 +34,10 @@
 - 安全规则扩充：危机表达（了结自己/结束这一切/解脱）、医疗疾病名词表、英文提示注入
 - 评测基线快照补齐安全类指标（crisis/medical/injection 三套件为确定性指标，本地重跑刷新）
 - `arq` 的 `WorkerSettings` 改为继承 `arq.typing.WorkerSettingsBase`，配置项缺失由类型检查器兜底
+- 仓库托管地址统一为 `github.com/dawnkeyan/perma`：替换 README 徽章、CHANGELOG 链接、
+  SECURITY 报告入口、部署脚本与镜像名里的 `your-org` 占位符
+- SOP 补充「SOP-0 · 代码托管与协作（GitHub）」：远程仓库配置、SSH 公钥注册、
+  分支推送、PR 流程、CI 四个 job 说明与发布前自检清单
 
 ### Fixed
 - 修复 RRF 融合时丢失另一通道排名（同一文档只在两路出现时不再残缺）
@@ -69,5 +73,5 @@
 - 部署编排：开发/生产两套 Docker Compose、Prometheus、Grafana、OTel Collector
 - CI/CD：后端质量门禁、前端质量门禁、离线评测门禁、安全扫描四个 job
 
-[Unreleased]: https://github.com/your-org/lumina/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/your-org/lumina/releases/tag/v0.1.0
+[Unreleased]: https://github.com/dawnkeyan/perma/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/dawnkeyan/perma/releases/tag/v0.1.0

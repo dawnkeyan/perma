@@ -198,7 +198,7 @@ modelscope login --token $MODELSCOPE_TOKEN
 python packages/models/scripts/download_model.py --model Qwen/Qwen2.5-1.5B-Instruct
 
 # 推送微调产物到魔搭
-python packages/models/scripts/push_to_modelscope.py --adapter lora_out --repo your-org/lumina-intent-lora
+python packages/models/scripts/push_to_modelscope.py --adapter lora_out --repo dawnkeyan/lumina-intent-lora
 ```
 
 详见 [DEPLOY_CLOUD.md §4](./DEPLOY_CLOUD.md) 与 `packages/models/README.md`。
@@ -372,7 +372,7 @@ brew install python@3.12 node@20 jq
 brew install --cask docker
 
 # 2. 拉代码
-git clone <your-repo-url> perma && cd perma
+git clone https://github.com/dawnkeyan/perma.git perma && cd perma
 
 # 3. 配置环境
 cp .env.example .env
@@ -401,7 +401,7 @@ cd apps/miniapp && npm install && npm run dev:weapp
 sudo ./ops/scripts/bootstrap.sh
 
 # 2. 克隆仓库
-sudo -u deploy git clone <your-repo-url> /opt/lumina
+sudo -u deploy git clone https://github.com/dawnkeyan/perma.git /opt/lumina
 
 # 3. 下发 .env（从密钥库取，不要在 git 里）
 cd /opt/lumina && cp .env.example .env && vim .env

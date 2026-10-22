@@ -161,7 +161,7 @@ sudo ./ops/scripts/bootstrap.sh
 ### 3.2 第 1 步：拉代码
 
 ```bash
-sudo -u deploy git clone <your-repo-url> /opt/lumina
+sudo -u deploy git clone https://github.com/dawnkeyan/perma.git /opt/lumina
 cd /opt/lumina
 ```
 

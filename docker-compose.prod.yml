@@ -66,7 +66,7 @@ services:
     expose: ["6379"]
 
   api:
-    image: ${LUMINA_IMAGE:-ghcr.io/your-org/lumina:latest}
+    image: ${LUMINA_IMAGE:-ghcr.io/dawnkeyan/perma:latest}
     restart: unless-stopped
     env_file: [.env]
     environment:
@@ -91,7 +91,7 @@ services:
     <<: *api-limits
 
   worker:
-    image: ${LUMINA_IMAGE:-ghcr.io/your-org/lumina:latest}
+    image: ${LUMINA_IMAGE:-ghcr.io/dawnkeyan/perma:latest}
     restart: unless-stopped
     command: ["python", "-m", "app.worker"]
     env_file: [.env]

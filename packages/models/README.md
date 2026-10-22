@@ -33,7 +33,7 @@ output/lumina-intent-lora/  (adapter_model.safetensors)
    │
    │  push_to_modelscope.py
    ▼
-ModelScope 模型仓库  your-org/lumina-intent-lora
+ModelScope 模型仓库  dawnkeyan/lumina-intent-lora
    │
    │  vLLM 拉取并起服务
    ▼
@@ -88,7 +88,7 @@ python packages/models/scripts/build_dataset.py \
 
 ```bash
 !pip install -U ms-swift
-!git clone <your-repo-url> lumina && cd lumina
+!git clone https://github.com/dawnkeyan/perma.git perma && cd perma
 !python packages/models/scripts/build_dataset.py --output data/sft --real-data <your-data>
 !swift sft --config packages/models/finetune/ms_swift_lora_intent.yaml
 ```
@@ -98,7 +98,7 @@ python packages/models/scripts/build_dataset.py \
 ```bash
 !python packages/models/scripts/push_to_modelscope.py \
    --adapter output/lumina-intent-lora \
-   --repo your-org/lumina-intent-lora
+   --repo dawnkeyan/lumina-intent-lora
 ```
 
 **方案 B：自建 GPU 服务器**
@@ -107,7 +107,7 @@ python packages/models/scripts/build_dataset.py \
 swift sft --config packages/models/finetune/ms_swift_lora_intent.yaml
 python packages/models/scripts/push_to_modelscope.py \
   --adapter output/lumina-intent-lora \
-  --repo your-org/lumina-intent-lora
+  --repo dawnkeyan/lumina-intent-lora
 ```
 
 **方案 C：云厂商 GPU 实例**

@@ -137,7 +137,7 @@ gitleaks detect --source . --redact
 
 **请不要开公开 Issue 报告安全漏洞。**
 
-请通过 GitHub 的 [Security Advisory](https://github.com/your-org/lumina/security/advisories/new)
+请通过 GitHub 的 [Security Advisory](https://github.com/dawnkeyan/perma/security/advisories/new)
 私下提交，或联系维护者邮箱。
 
 ### 报告模板

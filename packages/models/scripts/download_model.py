@@ -17,7 +17,7 @@
 
     # 只拉 LoRA 适配器（体积小，几十 MB）
     python packages/models/scripts/download_model.py \\
-        --model your-org/lumina-intent-lora --output ./models/lora
+        --model dawnkeyan/lumina-intent-lora --output ./models/lora
 
 环境变量：
     MODELSCOPE_TOKEN   访问令牌（https://modelscope.cn 右上角头像 → 访问令牌）
@@ -142,7 +142,7 @@ def download_model(
     """主下载流程。
 
     Args:
-        model_id: 魔搭模型 ID，形如 `Qwen/Qwen2.5-1.5B-Instruct` 或 `your-org/your-model`
+        model_id: 魔搭模型 ID，形如 `Qwen/Qwen2.5-1.5B-Instruct` 或 `dawnkeyan/your-model`
         output: 输出目录；None 表示只放到缓存目录（SDK 管理）
         cache_dir: 缓存目录
         revision: 模型版本（分支/标签/commit），默认最新
