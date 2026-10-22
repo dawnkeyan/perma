@@ -16,17 +16,17 @@
     # 推送微调产物
     python packages/models/scripts/push_to_modelscope.py \\
         --adapter lora_out \\
-        --repo your-org/lumina-intent-lora
+        --repo dawnkeyan/lumina-intent-lora
 
     # 带说明推送
     python packages/models/scripts/push_to_modelscope.py \\
         --adapter lora_out \\
-        --repo your-org/lumina-intent-lora \\
+        --repo dawnkeyan/lumina-intent-lora \\
         --note "基于 Qwen2.5-1.5B 的意图识别 LoRA，训练集 1200 条"
 
     # 先 dry-run 看会推哪些文件
     python packages/models/scripts/push_to_modelscope.py \\
-        --adapter lora_out --repo your-org/lumina-intent-lora --dry-run
+        --adapter lora_out --repo dawnkeyan/lumina-intent-lora --dry-run
 """
 
 from __future__ import annotations
@@ -259,7 +259,7 @@ def main() -> int:
     """命令行入口。"""
     parser = argparse.ArgumentParser(description="推送 LoRA 适配器到 ModelScope 魔搭")
     parser.add_argument("--adapter", required=True, help="微调产物目录")
-    parser.add_argument("--repo", required=True, help="魔搭模型仓库 ID，如 your-org/lumina-intent-lora")
+    parser.add_argument("--repo", required=True, help="魔搭模型仓库 ID，如 dawnkeyan/lumina-intent-lora")
     parser.add_argument("--note", default="", help="模型说明（会写进模型卡）")
     parser.add_argument("--base-model", default="Qwen/Qwen2.5-1.5B-Instruct", help="基座模型 ID")
     parser.add_argument("--dry-run", action="store_true", help="只打印将要上传的文件")

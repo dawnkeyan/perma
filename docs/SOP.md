@@ -49,6 +49,127 @@
 
 ---
 
+## SOP-0 · 代码托管与协作（GitHub）
+
+> 本仓库托管在 `github.com/dawnkeyan/perma`。本节讲三件事：第一次怎么把仓库推上去、
+> 日常怎么推送与发 PR、以及一台机器上如何让「公司仓库」与「个人仓库」的身份互不干扰。
+
+### 触发条件
+
+- 第一次把本地仓库关联到 GitHub 远程仓库
+- 换机器 / 换账号后要能推送
+- 日常提交后要推上去并走 PR
+
+### Step 1 · 一次性配置（只写仓库级配置，不动全局账号）
+
+```bash
+# 1.1 关联远程仓库（写进 .git/config）
+git remote add origin git@github.com:dawnkeyan/perma.git
+git remote -v
+
+# 1.2 固定这个仓库的提交身份
+git config --local user.name  "dawnkeyan"
+git config --local user.email "dawnkeyan@126.com"
+
+# 1.3 指定用哪把私钥（不要把公司的密钥交给 GitHub）
+git config --local core.sshCommand "ssh -i ~/.ssh/id_.self -o IdentitiesOnly=yes"
+
+# 1.4 验证认证：应回显 "Hi dawnkeyan! You've successfully authenticated"
+ssh -T git@github.com
+```
+
+**为什么坚持用 `--local`**：全局 `~/.gitconfig` 里往往还是上一个工作环境的身份与凭据。
+`--local` 只改当前仓库的 `.git/config`，于是同一台机器上可以同时存在
+「公司仓库用公司身份、个人仓库用个人身份」，两边互不污染，也不用来回
+`git config --global --unset`。
+
+**每次提交前复核身份**（防止误用全局身份把公司邮箱带进公开仓库）：
+
+```bash
+git log -1 --format='%an <%ae>'
+# 期望：dawnkeyan <dawnkeyan@126.com>
+```
+
+### Step 2 · 公钥没注册时的处理
+
+现象：`Permission denied (publickey)`。GitHub 不认识你的公钥就一定推不上去。
+
+1. 打印公钥：`cat ~/.ssh/id_.self.pub`
+2. 打开 <https://github.com/settings/ssh/new>
+3. Title 填 `perma-mac`，Key 粘贴公钥整行 → **Add SSH key**
+4. 回到终端重跑 `ssh -T git@github.com` 验证（GitHub 侧立即生效，不用等）
+
+### Step 3 · 推送分支
+
+```bash
+git push -u origin main
+git push -u origin develop
+git push -u origin feat/tool-catalog-and-quality-gate
+```
+
+分支模型（与 CONTRIBUTING 一致）：
+
+| 分支 | 用途 | 能否直推 |
+| --- | --- | --- |
+| `main` | 生产发布 | 否；只能由 PR 合入，用 merge commit 保留历史 |
+| `develop` | 集成分支 | 否；只能由 PR 合入，用 squash merge |
+| `feat/ fix/ docs/ refactor/ ops/` | 特性分支，从 `develop` 切出 | 是 |
+
+### Step 4 · 发 PR
+
+1. 推分支 → 仓库页会出现 **Compare & pull request** 按钮
+2. PR 描述按模板写全四段（详见 CONTRIBUTING）：
+   - **改了什么** — 改动文件与行为变化
+   - **为什么改** — 问题现象 + 根因 + 为什么选这个方案（**最重要**）
+   - **怎么验证** — 可复现的验证命令；涉及评测的写清指标分数变化
+   - **影响面** — 是否改协议 / 是否需要迁移 / 是否影响线上
+3. 四个 CI job 全绿才允许合并
+
+### Step 5 · CI 四个 job 分别拦什么
+
+| job | 拦的问题 | 失败时怎么办 |
+| --- | --- | --- |
+| `backend`（后端质量门禁） | ruff / mypy 报错 | 本地 `make lint && make typecheck` 先过 |
+| `frontend`（小程序质量门禁） | TS 类型 / ESLint 报错 | 本地 `npm run typecheck && npm run lint` |
+| `eval`（离线评测门禁） | 指标下降、安全类指标退步 | `make eval` 看哪条指标掉了，转 BadCase SOP |
+| `security`（安全扫描） | 提交历史里出现密钥 | 换掉并轮换密钥，**不要**只删文件 |
+
+CI 触发时机：push 到 `main` / `develop`，以及以它们为目标的 PR。
+
+### 常见坑
+
+| 现象 | 原因 | 处理 |
+| --- | --- | --- |
+| `REMOTE HOST IDENTIFICATION HAS CHANGED!` | GitHub 轮换过 SSH 主机密钥，本机 `known_hosts` 里存的是旧的那把 | 先把新密钥指纹与 [官方指纹清单](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints) 核对一致，再 `ssh-keygen -R github.com` 重连 |
+| `Permission denied (publickey)` | 公钥没加到 GitHub，或 `core.sshCommand` 指向了别的私钥 | 走 Step 2；核对 `git config --local core.sshCommand` |
+| HTTPS push 极慢甚至超时 | 到 `github.com` 的 443 链路质量差 | 改用 SSH；实在不行走 `ssh -p 443 git@ssh.github.com` |
+| 提交带出公司邮箱 | 用了全局 `user.email` | `git config --local` 固定身份，并按 Step 1 复核 |
+| 推完 CI 没跑 | PR 目标分支不是 `main`/`develop` | 确认 PR 目标分支；CI 只监听这两个分支 |
+
+### 发布前自检清单（推到公开仓库前逐条过）
+
+```bash
+# 1. 真实 .env 没被跟踪（.env.example 是模板，可以跟踪）
+git ls-files | grep -E '^\.env$' && echo "危险：.env 被跟踪了"
+
+# 2. 没有残留占位符
+git grep -nE 'your-org|<your-repo-url>' -- .
+
+# 3. 没有公司标识、内网地址、个人绝对路径
+git grep -inE 'weipaitang|/Users/[a-z]+/' -- .
+
+# 4. 提交身份只有本人
+git log --format='%an <%ae>' | sort -u
+
+# 5. 质量门禁本地全绿
+make lint && make typecheck && make test && make eval
+```
+
+个人私有材料（本地笔记、简历类文件等）统一由 `.gitignore` 末段的规则排除，
+**不要**为了「让仓库看起来更完整」而把这类文件 `git add -f` 进去。
+
+---
+
 ## SOP-1 · 项目冷启动（Day 1 ~ Day 14）
 
 ### 触发条件

@@ -6,7 +6,7 @@
 
 不诊断 · 不替代 · 有行动
 
-[![CI](https://github.com/your-org/lumina/actions/workflows/ci.yml/badge.svg)](https://github.com/your-org/lumina/actions/workflows/ci.yml)
+[![CI](https://github.com/dawnkeyan/perma/actions/workflows/ci.yml/badge.svg)](https://github.com/dawnkeyan/perma/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.12-blue.svg)](services/api/pyproject.toml)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue.svg)](apps/miniapp/package.json)
@@ -135,8 +135,8 @@ lumina/
 ### 2. 启动
 
 ```bash
-git clone https://github.com/your-org/lumina.git
-cd lumina
+git clone https://github.com/dawnkeyan/perma.git
+cd perma
 
 cp .env.example .env      # 填入 LLM_API_KEY 等
 make init                 # 起 Postgres/Redis/ES，建表 + 建 HNSW 索引

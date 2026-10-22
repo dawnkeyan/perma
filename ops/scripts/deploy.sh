@@ -17,7 +17,7 @@ warn() { printf '\033[33m[%s] %s\033[0m\n' "$(date +%H:%M:%S)" "$*"; }
 die()  { printf '\033[31m[%s] %s\033[0m\n' "$(date +%H:%M:%S)" "$*" >&2; exit 1; }
 
 REPO_DIR="${REPO_DIR:-/opt/lumina}"
-REPO_SLUG="${REPO_SLUG:-your-org/lumina}"
+REPO_SLUG="${REPO_SLUG:-dawnkeyan/perma}"
 BRANCH="${DEPLOY_BRANCH:-main}"
 DEPLOY_TAG="${DEPLOY_TAG:-}"
 HEALTH_TIMEOUT="${HEALTH_TIMEOUT:-180}"
