@@ -72,7 +72,7 @@ git config --local user.name  "dawnkeyan"
 git config --local user.email "dawnkeyan@126.com"
 
 # 1.3 指定用哪把私钥（不要把公司的密钥交给 GitHub）
-git config --local core.sshCommand "ssh -i ~/.ssh/id_.self -o IdentitiesOnly=yes"
+git config --local core.sshCommand "ssh -i ~/.ssh/id_ed25519_github -o IdentitiesOnly=yes"
 
 # 1.4 验证认证：应回显 "Hi dawnkeyan! You've successfully authenticated"
 ssh -T git@github.com
@@ -94,10 +94,22 @@ git log -1 --format='%an <%ae>'
 
 现象：`Permission denied (publickey)`。GitHub 不认识你的公钥就一定推不上去。
 
-1. 打印公钥：`cat ~/.ssh/id_.self.pub`
-2. 打开 <https://github.com/settings/ssh/new>
-3. Title 填 `perma-mac`，Key 粘贴公钥整行 → **Add SSH key**
-4. 回到终端重跑 `ssh -T git@github.com` 验证（GitHub 侧立即生效，不用等）
+**先有一把够格的钥匙**：用 ed25519（GitHub 官方推荐）。若用 RSA，
+长度建议 ≥ 3072 位，低于 3072 会被表单拦下并提示 `Key is too short`。
+
+```bash
+ssh-keygen -t ed25519 -C "github:<你的邮箱>" -f ~/.ssh/id_ed25519_github
+pbcopy < ~/.ssh/id_ed25519_github.pub   # 直接进剪贴板，避免手打残缺
+```
+
+1. 打开 <https://github.com/settings/ssh/new>
+2. **先确认右上角登录的是目标账号**——加到别的账号名下是最常见的失败原因
+3. Title 填 `perma-mac`，Key 框直接 `Cmd+V` → **Add SSH key**
+4. 页面会列出该密钥的指纹，与本地核对一致才算加对：
+   ```bash
+   ssh-keygen -lf ~/.ssh/id_ed25519_github.pub
+   ```
+5. 回到终端重跑 `ssh -T git@github.com` 验证（GitHub 侧立即生效，不用等）
 
 ### Step 3 · 推送分支
 
@@ -142,6 +154,8 @@ CI 触发时机：push 到 `main` / `develop`，以及以它们为目标的 PR�
 | --- | --- | --- |
 | `REMOTE HOST IDENTIFICATION HAS CHANGED!` | GitHub 轮换过 SSH 主机密钥，本机 `known_hosts` 里存的是旧的那把 | 先把新密钥指纹与 [官方指纹清单](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints) 核对一致，再 `ssh-keygen -R github.com` 重连 |
 | `Permission denied (publickey)` | 公钥没加到 GitHub，或 `core.sshCommand` 指向了别的私钥 | 走 Step 2；核对 `git config --local core.sshCommand` |
+| 添加公钥时提示 `Key is too short` | RSA 密钥长度不足 3072 位 | 改用 ed25519：`ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519_github` |
+| 公钥明明加了却仍被拒 | 钥匙加到了另一个 GitHub 账号下 | 打开 settings/keys 核对右上角用户名与密钥列表 |
 | HTTPS push 极慢甚至超时 | 到 `github.com` 的 443 链路质量差 | 改用 SSH；实在不行走 `ssh -p 443 git@ssh.github.com` |
 | 提交带出公司邮箱 | 用了全局 `user.email` | `git config --local` 固定身份，并按 Step 1 复核 |
 | 推完 CI 没跑 | PR 目标分支不是 `main`/`develop` | 确认 PR 目标分支；CI 只监听这两个分支 |
