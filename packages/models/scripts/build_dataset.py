@@ -373,7 +373,7 @@ def main() -> int:
         help="把黄金集也放进训练集（默认只作验证集）",
     )
     parser.add_argument("--max-per-intent", type=int, default=800, help="每个意图的最大样本数")
-    parser.add_argument("--val-ratio", type=float, default=VAL_ROTIO, help="验证集比例")
+    parser.add_argument("--val-ratio", type=float, default=VAL_RATIO, help="验证集比例")
     parser.add_argument("--dry-run", action="store_true", help="只统计不写文件")
     args = parser.parse_args()
 
