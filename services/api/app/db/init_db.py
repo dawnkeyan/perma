@@ -53,8 +53,7 @@ EXTRA_INDEX_SQL = [
     "CREATE INDEX IF NOT EXISTS idx_llm_calls_created_date "
     "ON llm_calls (date_trunc('day', created_at))",
     # 情绪趋势：按用户取最近记录
-    "CREATE INDEX IF NOT EXISTS idx_journal_recent "
-    "ON journal_entries (user_id, occurred_at DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_journal_recent ON journal_entries (user_id, occurred_at DESC)",
 ]
 
 
@@ -124,7 +123,7 @@ async def init_db(drop: bool = False, with_index: bool = True) -> int:
         if with_index:
             await create_indexes()
         counts = await verify()
-    except Exception as exc:  # noqa: BLE001 - 顶层入口需要给出清晰错误
+    except Exception as exc:
         logger.error("数据库初始化失败", error=str(exc))
         return 1
     finally:

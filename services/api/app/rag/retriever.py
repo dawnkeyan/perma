@@ -15,7 +15,7 @@ BM25 靠词面精确匹配反而更稳，但完全无法处理口语化改写。
 
 from __future__ import annotations
 
-import asyncio
+import re
 from dataclasses import dataclass, field
 
 import httpx
@@ -25,9 +25,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.llm.gateway import get_gateway
-from app.rag.chunking import estimate_tokens
 
 logger = get_logger(__name__)
+
+# LLM 改写查询时可能返回带编号的列表（"1. 情绪低落" / "- 行为激活"）。
+# 用正则一次性去掉行首的编号与项目符号，比 lstrip 字符集更准确
+# （lstrip 会把正文里开头的数字也删掉）。
+_LIST_PREFIX_RE = re.compile(r"^[\s\-•*\d.、)]+")
 
 
 @dataclass(slots=True)
@@ -38,7 +42,7 @@ class RetrievedChunk:
     doc_id: str
     content: str
     score: float
-    source: str                       # vector | bm25 | fusion
+    source: str  # vector | bm25 | fusion
     rank: int = 0
     heading_path: list[str] = field(default_factory=list)
     metadata: dict = field(default_factory=dict)
@@ -48,7 +52,10 @@ class RetrievedChunk:
 
     @property
     def title(self) -> str:
-        return str(self.metadata.get("title") or (self.heading_path[0] if self.heading_path else "知识条目"))
+        return str(
+            self.metadata.get("title")
+            or (self.heading_path[0] if self.heading_path else "知识条目")
+        )
 
 
 @dataclass(slots=True)
@@ -63,8 +70,37 @@ class SearchDiagnostics:
     vector_ms: int = 0
     bm25_ms: int = 0
     rerank_ms: int = 0
-    degraded: str | None = None       # 降级原因，如 "bm25_unavailable"
+    degraded: str | None = None  # 降级原因，如 "bm25_unavailable"
     top_scores: list[float] = field(default_factory=list)
+
+
+def _merge_chunk(
+    merged: dict[str, RetrievedChunk],
+    chunk: RetrievedChunk,
+    *,
+    rank_attr: str,
+) -> None:
+    """把一路的召回结果并入融合表（RRF 融合的辅助函数）。
+
+    关键点：**同一个 chunk 在两路都被召回时，两侧的排名都要保留**。
+    早期实现是「已存在就跳过」，于是保留下来的总是先处理那一路的对象，
+    另一路的 rank 属性被整个丢弃——分数其实算对了（两路都会加分），
+    但 BadCase 归因时看不到「它在 BM25 里排第几」，
+    于是「是召回问题还是排序问题」这个问题就没法回答了。
+
+    这里只补齐缺失的一侧，不覆盖已有的值，避免把向量路的排名改坏。
+    """
+    existing = merged.get(chunk.id)
+    if existing is None:
+        merged[chunk.id] = chunk
+        return
+
+    if getattr(existing, rank_attr, None) is None:
+        setattr(existing, rank_attr, getattr(chunk, rank_attr, None))
+    # 另一侧的排名如果也缺失，一并从当前对象补上
+    other_attr = "bm25_rank" if rank_attr == "vector_rank" else "vector_rank"
+    if getattr(existing, other_attr, None) is None:
+        setattr(existing, other_attr, getattr(chunk, other_attr, None))
 
 
 class HybridRetriever:
@@ -123,7 +159,7 @@ class HybridRetriever:
 
         # 4) 精排
         if use_rerank and fused:
-            fused = await self._rerank(query, fused, top_k=settings.rerank_top_n)
+            fused = await self._rerank(query, fused, top_n=settings.rerank_top_n)
             diag.rerank_count = len(fused)
         else:
             fused = fused[:top_k]
@@ -131,9 +167,7 @@ class HybridRetriever:
         # 5) 证据等级过滤
         if min_evidence_level > 0:
             filtered = [
-                c
-                for c in fused
-                if int(c.metadata.get("evidence_level", 0)) >= min_evidence_level
+                c for c in fused if int(c.metadata.get("evidence_level", 0)) >= min_evidence_level
             ]
             # 过滤后不足则回退到未过滤结果，避免完全无结果
             if filtered:
@@ -150,9 +184,7 @@ class HybridRetriever:
     # ------------------------------------------------------------------ #
     # 向量召回
     # ------------------------------------------------------------------ #
-    async def _vector_search(
-        self, query: str, limit: int
-    ) -> tuple[list[RetrievedChunk], int]:
+    async def _vector_search(self, query: str, limit: int) -> tuple[list[RetrievedChunk], int]:
         import time
 
         started = time.perf_counter()
@@ -187,14 +219,18 @@ class HybridRetriever:
 
         try:
             rows = (
-                await self.session.execute(
-                    sql,
-                    {
-                        "vec": vector_literal,
-                        "limit": limit,
-                    },
+                (
+                    await self.session.execute(
+                        sql,
+                        {
+                            "vec": vector_literal,
+                            "limit": limit,
+                        },
+                    )
                 )
-            ).mappings().all()
+                .mappings()
+                .all()
+            )
         except Exception as exc:
             logger.error("vector_search_failed", error=str(exc))
             return [], 0
@@ -204,7 +240,7 @@ class HybridRetriever:
                 id=str(row["id"]),
                 doc_id=str(row["doc_id"]),
                 content=str(row["content"]),
-                score=1.0 - float(row["distance"]),   # cosine 距离转相似度
+                score=1.0 - float(row["distance"]),  # cosine 距离转相似度
                 source="vector",
                 heading_path=list(row["heading_path"] or []),
                 metadata=dict(row["metadata"] or {}),
@@ -217,9 +253,7 @@ class HybridRetriever:
     # ------------------------------------------------------------------ #
     # BM25 召回
     # ------------------------------------------------------------------ #
-    async def _bm25_search(
-        self, query: str, limit: int
-    ) -> tuple[list[RetrievedChunk], int]:
+    async def _bm25_search(self, query: str, limit: int) -> tuple[list[RetrievedChunk], int]:
         import time
 
         started = time.perf_counter()
@@ -296,14 +330,12 @@ class HybridRetriever:
         # 属于典型的 falsy 陷阱。排名是 1-based，0 只会出现在数据异常时，
         # 但那时应该按「排在第 0 位」处理并让上层能看出来，而不是静默降权。
         for chunk in vector_chunks:
-            if chunk.id not in merged:
-                merged[chunk.id] = chunk
+            _merge_chunk(merged, chunk, rank_attr="vector_rank")
             rank = chunk.vector_rank if chunk.vector_rank is not None else 999
             scores[chunk.id] = scores.get(chunk.id, 0.0) + 1.0 / (k + rank)
 
         for chunk in bm25_chunks:
-            if chunk.id not in merged:
-                merged[chunk.id] = chunk
+            _merge_chunk(merged, chunk, rank_attr="bm25_rank")
             rank = chunk.bm25_rank if chunk.bm25_rank is not None else 999
             scores[chunk.id] = scores.get(chunk.id, 0.0) + 1.0 / (k + rank)
 
@@ -379,7 +411,11 @@ class HybridRetriever:
                     max_tokens=100,
                 )
             )
-            queries = [line.strip("- 0123456789. ") for line in response.content.split("\n") if line.strip()]
+            queries = [
+                _LIST_PREFIX_RE.sub("", line).strip()
+                for line in response.content.split("\n")
+                if line.strip()
+            ]
             queries = [q for q in queries if 1 <= len(q) <= 40][:max_queries]
             if queries:
                 return queries

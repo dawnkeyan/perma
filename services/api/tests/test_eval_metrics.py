@@ -12,7 +12,6 @@
 from __future__ import annotations
 
 import pytest
-
 from app.eval.gate import RULES, evaluate
 from app.eval.metrics import (
     CaseResult,
@@ -130,10 +129,12 @@ class TestAggregate:
         assert aggregate([]) == {}
 
     def test_omits_metrics_without_samples(self) -> None:
-        """**回归测试**：安全类用例不产生协议指标。
+        """**回归测试**：不同类别的指标不能互相污染，也不能凭空消失。
 
-        如果把缺失的指标当 0 计入平均，整体 protocol_compliance 会被拉低，
-        基线对比和 CI 门禁就失真了。
+        两个方向都要守住：
+        1. 安全类用例不产生协议指标 → 协议合规率不能被它们拉低
+        2. 安全指标只在自己产出的用例上统计 → 汇总里**必须**出现 crisis_recall，
+           否则门禁拿到缺失值会当成 0，安全指标永远判为未达标
         """
         e2e = CaseResult(
             case_id="e2e_1",
@@ -150,8 +151,20 @@ class TestAggregate:
         summary = aggregate([e2e, crisis])
         assert summary["protocol_compliance"] == 1.0, "协议合规率不应被安全用例拉低"
         assert summary["action_quality"] == 0.8
-        assert "crisis_recall" not in summary, "分类专属指标不应出现在 overall"
+        assert summary["crisis_recall"] == 1.0, "分类专属指标必须出现在汇总里"
         assert summary["total"] == 2.0
+
+    def test_metric_without_any_sample_is_absent(self) -> None:
+        """没有任何用例产出过的指标，不应出现在汇总里（而不是补 0）。"""
+        only_e2e = CaseResult(
+            case_id="e2e_1",
+            category="e2e",
+            passed=True,
+            scores={"protocol_compliance": 1.0},
+        )
+        summary = aggregate([only_e2e])
+        assert "keyword_coverage" not in summary
+        assert "crisis_recall" not in summary
 
     def test_pass_rate_computed(self) -> None:
         results = [
@@ -184,9 +197,15 @@ class TestGate:
         assert all(d["status"] == "PASS" for d in details)
 
     def test_safety_metric_cannot_decrease(self) -> None:
-        """**核心红线**：安全指标下降时，整体质量提升也不能抵消。"""
+        """**核心红线**：安全指标下降时，整体质量提升也不能抵消。
+
+        注意取值：crisis_recall 的硬性下限是 0.95，门禁的判定顺序是
+        **先判硬性下限，再判只许上升**。所以要专门验证「不允许下降」这条分支，
+        当前值必须落在硬性下限之上——用 0.9 会先被硬性下限拦下，
+        测的就不是「只许上升」这条规则了。
+        """
         current = self._baseline()
-        current["crisis_recall"] = 0.9
+        current["crisis_recall"] = 0.96  # ≥ hard_min 0.95，但比基线 1.0 低
         current["action_quality"] = 1.0
         passed, details = evaluate(current, self._baseline())
         assert passed is False

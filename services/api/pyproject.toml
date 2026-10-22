@@ -61,7 +61,10 @@ dev = [
     "ruff>=0.8.0",
     "mypy>=1.13.0",
     "types-pyyaml>=6.0.12",
-    "types-redis>=4.6.0",
+    # 注意：不要装 types-redis。
+    # redis>=5.0 自带 py.typed（类型标注在包内），
+    # 而 types-redis 停在 4.6，缺 redis.asyncio 的 aclose()，
+    # 装了反而会让 mypy 报「Redis 没有 aclose 属性」的假错。
     "pre-commit>=4.0.1",
     "ipython>=8.30.0",
 ]

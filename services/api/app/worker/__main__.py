@@ -7,9 +7,9 @@
 
 from __future__ import annotations
 
-import sys
-
 from app.worker.main import main
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # main() 内部已经处理了 KeyboardInterrupt 与日志，
+    # 这里不需要（也不能）再包一层 sys.exit：它返回 None。
+    main()

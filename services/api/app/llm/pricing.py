@@ -36,10 +36,7 @@ def get_price(model: str) -> tuple[float, float]:
 def estimate_cost(provider: str, model: str, usage: Usage) -> float:
     """估算一次调用的成本（元）。"""
     price_in, price_out = get_price(model)
-    cost = (
-        usage.prompt_tokens / 1000.0 * price_in
-        + usage.completion_tokens / 1000.0 * price_out
-    )
+    cost = usage.prompt_tokens / 1000.0 * price_in + usage.completion_tokens / 1000.0 * price_out
     # 本地模型不计云端价格，但保留极小的自部署摊销
     if provider == "local" and model not in PRICING:
         cost *= 1.0

@@ -69,9 +69,10 @@ async def timeline(
 ) -> dict[str, Any]:
     """按日聚合的时间线 + 统计。"""
     rows = (
-        await session.execute(
-            text(
-                """
+        (
+            await session.execute(
+                text(
+                    """
                 SELECT
                     occurred_at::date AS day,
                     round(avg(intensity)::numeric, 2) AS avg_intensity,
@@ -85,30 +86,39 @@ async def timeline(
                 ORDER BY 1 DESC
                 LIMIT 180
                 """
-            ),
-            {"uid": user_id, "start": start, "end": end},
+                ),
+                {"uid": user_id, "start": start, "end": end},
+            )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
 
     stats = (
-        await session.execute(
-            text(
-                """
+        (
+            await session.execute(
+                text(
+                    """
                 SELECT
                     count(DISTINCT occurred_at::date) AS active_days,
                     round(avg(intensity)::numeric, 2) AS avg_intensity_7d
                 FROM journal_entries
                 WHERE user_id = :uid AND occurred_at >= now() - interval '7 days'
                 """
-            ),
-            {"uid": user_id},
+                ),
+                {"uid": user_id},
+            )
         )
-    ).mappings().first()
+        .mappings()
+        .first()
+    )
 
     return {
         "items": [dict(r) for r in rows],
         "stats": {
             "active_days": stats["active_days"] if stats else 0,
-            "avg_intensity_7d": float(stats["avg_intensity_7d"]) if stats and stats["avg_intensity_7d"] else 0.0,
+            "avg_intensity_7d": float(stats["avg_intensity_7d"])
+            if stats and stats["avg_intensity_7d"]
+            else 0.0,
         },
     }

@@ -11,19 +11,17 @@ from enum import StrEnum
 from typing import Any, NotRequired, TypedDict
 
 from app.agents.safety import SafetyVerdict
-from app.rag.context import Citation
-from app.rag.retriever import SearchDiagnostics
 
 
 class Intent(StrEnum):
     """用户意图。"""
 
-    CHITCHAT = "chitchat"              # 寒暄、无意义
-    KNOWLEDGE = "knowledge"            # 心理学知识问答
+    CHITCHAT = "chitchat"  # 寒暄、无意义
+    KNOWLEDGE = "knowledge"  # 心理学知识问答
     EMOTION_SUPPORT = "emotion_support"  # 情绪支持
-    REFLECTION = "reflection"          # 认知重构
-    CRISIS = "crisis"                  # 危机
-    MEDICAL = "medical"                # 医疗越界
+    REFLECTION = "reflection"  # 认知重构
+    CRISIS = "crisis"  # 危机
+    MEDICAL = "medical"  # 医疗越界
 
 
 @dataclass(slots=True)
@@ -53,9 +51,7 @@ class UserProfile:
 
     @property
     def is_empty(self) -> bool:
-        return not any(
-            [self.strengths, self.blind_spots, self.preferences, self.long_term_theme]
-        )
+        return not any([self.strengths, self.blind_spots, self.preferences, self.long_term_theme])
 
 
 @dataclass(slots=True)
@@ -93,6 +89,12 @@ class CoachState(TypedDict):
     retry_count: int
     needs_retrieval: bool
 
+    # ---- 工具上下文（见 app/tools/catalog.py）----
+    # tool_id：本次请求来自哪个工具；空串表示普通对话
+    tool_id: str
+    # tool_focus：工具定义的检索侧重，会追加到子查询里
+    tool_focus: list[str]
+
     # ---- 检索 ----
     sub_queries: list[str]
     retrieved_chunks: list[dict[str, Any]]
@@ -120,6 +122,8 @@ def make_initial_state(
     history: list[dict[str, str]] | None = None,
     emotion_context: dict[str, Any] | None = None,
     user_profile: dict[str, Any] | None = None,
+    tool_id: str = "",
+    tool_focus: list[str] | None = None,
 ) -> CoachState:
     """构造初始状态。"""
     return CoachState(
@@ -133,6 +137,8 @@ def make_initial_state(
         turn=0,
         retry_count=0,
         needs_retrieval=False,
+        tool_id=tool_id,
+        tool_focus=list(tool_focus or []),
         sub_queries=[],
         retrieved_chunks=[],
         citations=[],

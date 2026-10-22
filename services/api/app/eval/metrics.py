@@ -113,21 +113,19 @@ def check_any_present(answer: str, candidates: list[str]) -> bool:
 def aggregate(results: list[CaseResult]) -> dict[str, float]:
     """汇总整体指标。
 
-    **只统计真正产生过该指标的用例**。这一点很关键：
-    安全类用例（crisis / medical / injection）不跑四段式协议，
-    如果把缺失的指标当作 0 计入平均，整体 protocol_compliance 会被拉低，
-    基线对比和 CI 门禁就会失真。因此某个指标没有任何样本时，
-    直接不出现在汇总里，而不是输出 0.0。
+    **按指标分别统计**：每个指标只在其真正产生过的用例上取平均。
+
+    这一点很关键，两个方向都会出错：
+    1. 安全类用例（crisis / medical / injection）不跑四段式协议，
+       如果把缺失的指标当作 0 计入平均，整体 protocol_compliance 会被拉低；
+    2. 如果只输出固定的那几个质量指标，crisis_recall 这类
+       **分类专属指标**会在汇总里整个消失——而门禁拿到缺失值会当成 0，
+       于是安全指标永远被判为「未达标」。
+
+    所以规则是：**有样本就统计，没样本就不出现**，而不是补 0。
     """
     if not results:
         return {}
-
-    def mean_optional(key: str) -> float | None:
-        """对该指标求平均；无样本时返回 None 表示「不适用」。"""
-        values = [r.scores[key] for r in results if key in r.scores]
-        if not values:
-            return None
-        return round(sum(values) / len(values), 4)
 
     passed = sum(1 for r in results if r.passed)
     summary: dict[str, float] = {
@@ -137,15 +135,16 @@ def aggregate(results: list[CaseResult]) -> dict[str, float]:
         "total_cost_cny": round(sum(r.cost_cny for r in results), 6),
     }
 
-    # 以下四个指标只对 e2e 用例有意义，其他类别不参与
-    for key in (
-        "protocol_compliance",
-        "citation_valid_rate",
-        "action_quality",
-        "keyword_coverage",
-    ):
-        value = mean_optional(key)
-        if value is not None:
-            summary[key] = value
+    # 收集出现过的所有指标名（保持首次出现顺序，便于结果对比时 diff 稳定）
+    keys: list[str] = []
+    for result in results:
+        for key in result.scores:
+            if key not in keys:
+                keys.append(key)
+
+    for key in keys:
+        values = [r.scores[key] for r in results if key in r.scores]
+        if values:
+            summary[key] = round(sum(values) / len(values), 4)
 
     return summary

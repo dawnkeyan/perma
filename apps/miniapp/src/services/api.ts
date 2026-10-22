@@ -147,11 +147,50 @@ export interface ChatResponse {
 export interface ChatRequest {
   session_id: string;
   message: string;
+  /**
+   * 工具 id（如 `mood_navigation`）。
+   *
+   * 传了以后服务端会按该工具的检索侧重与上下文要求执行：
+   * 「先识别状态，再匹配干预策略」这句话由后端保证，客户端只负责把用户
+   * 引到正确的入口，不在本地复刻业务语义。
+   */
+  tool_id?: string;
   context?: {
     emotion_window_days?: number;
     include_profile?: boolean;
   };
   idempotency_key?: string;
+}
+
+// --------------------------------------------------------------------------
+// 工具目录
+// --------------------------------------------------------------------------
+
+/** 工具流程中的一步（展示用）。 */
+export interface ToolStep {
+  title: string;
+  hint: string;
+}
+
+/**
+ * 首页工具卡片。
+ *
+ * 字段与后端 `GET /v1/tools` 的 `ToolOut` 一一对应，
+ * 注意后端**不下发** `focus`（检索侧重），那是服务端内部策略。
+ */
+export interface Tool {
+  id: string;
+  name: string;
+  description: string;
+  /** 图标标识，服务端给的是语义名，前端映射成 emoji/图形。 */
+  icon: string;
+  /** 点击后的目标路由。 */
+  entry: string;
+  /** 预填给用户的开场白，用户可改后再发送。 */
+  starter_prompt: string;
+  steps: ToolStep[];
+  /** 推荐该工具的情绪 key，用于首页置顶与标签展示。 */
+  recommended_for: string[];
 }
 
 // --------------------------------------------------------------------------
@@ -188,6 +227,19 @@ export const api = {
         }>;
         stats: { active_days: number; avg_intensity_7d: number };
       }>(`/journal/timeline${query}`);
+    },
+  },
+
+  /**
+   * 工具目录。
+   *
+   * 走接口而不是前端硬编码：产品改一句文案不需要发版，
+   * 也避免前后端各维护一份工具清单导致漂移。
+   */
+  tools: {
+    list: (emotion?: Emotion) => {
+      const query = emotion ? `?emotion=${encodeURIComponent(emotion)}` : '';
+      return request<Tool[]>(`/tools${query}`);
     },
   },
 
@@ -247,17 +299,21 @@ export function streamChat(
     },
   });
 
-  const chunks: ArrayBuffer[] = [];
-  let decoder = '';
+  // SSE 解析状态：
+  // - decoder 用 stream 模式解码，保证跨 chunk 的中文等多字节字符不被截断
+  // - buffer 保存尚未遇到分隔符的半帧，等下一个 chunk 到达后接着解析
+  //
+  // 关键：只处理**新出现的**完整帧。
+  // 早期实现每次都把累计内容重新切分，会把已处理过的帧再触发一次，
+  // 表现为流式回复内容重复。
+  const decoder = new TextDecoder('utf-8');
+  let buffer = '';
 
   (task as unknown as { onChunkReceived: (cb: (r: { data: ArrayBuffer }) => void) => void }).onChunkReceived(
     (res) => {
-      chunks.push(res.data);
-      const text = new TextDecoder('utf-8').decode(
-        new Uint8Array(chunks.reduce((acc, cur) => [...acc, ...new Uint8Array(cur)], [] as number[])),
-      );
-      const frames = text.split('\n\n');
-      decoder = frames.pop() ?? '';
+      buffer += decoder.decode(new Uint8Array(res.data), { stream: true });
+      const frames = buffer.split('\n\n');
+      buffer = frames.pop() ?? '';
 
       for (const frame of frames) {
         const event = parseSseFrame(frame);

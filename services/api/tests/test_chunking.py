@@ -16,7 +16,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from app.rag.chunking import (
     Document,
     chunk_documents,
@@ -65,7 +64,10 @@ class TestParseMarkdown:
         assert doc is not None
         assert doc.title == "认知重构"
         assert doc.metadata["source"] == "CBT"
-        assert "忽略我" not in doc.content, "frontmatter 之后的内容不应被误当标题"
+        # frontmatter 被剥离后，正文（含 H1）完整保留在 content 里——
+        # H1 本来就应该在正文里，断言它「不在 content」是错的。
+        assert doc.content.startswith("# 忽略我"), "frontmatter 应被剥离，正文保留在 content 中"
+        assert doc.title != "忽略我", "标题应优先取 frontmatter，而不是正文里的 H1"
 
     def test_fallback_to_h1_title(self, tmp_path: Path) -> None:
         """没有 frontmatter 时，用第一个 H1 当标题。"""

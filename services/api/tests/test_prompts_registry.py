@@ -14,7 +14,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from app.prompts.registry import PromptRegistry
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -63,9 +62,18 @@ class TestVersioning:
         assert meta.status == "active"
 
     def test_get_specific_version(self, registry: PromptRegistry) -> None:
-        """能按版本号精确取到历史版本——这是回滚的前提。"""
-        meta = registry.get("coach", 1)
-        assert meta.version == 1
+        """能按版本号精确取到历史版本——这是回滚的前提。
+
+        这里不写死版本号：Prompt 的历史版本会随迭代增多，
+        写死一个具体数字（比如 1）会让测试在新增/清理版本后莫名其妙地失败。
+        取列表里的最早版本，验证的是「按版本号能精确取到」这个行为本身。
+        """
+        versions = registry.list_versions("coach")
+        assert versions, "coach 至少应该有一个版本"
+        oldest = versions[0]
+        meta = registry.get("coach", oldest.version)
+        assert meta.version == oldest.version
+        assert meta.content_hash == oldest.content_hash
 
     def test_list_versions_is_sorted(self, registry: PromptRegistry) -> None:
         versions = registry.list_versions("coach")

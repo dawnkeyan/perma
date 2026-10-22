@@ -37,9 +37,9 @@ async def readyz() -> dict[str, Any]:
     try:
         import redis.asyncio as aioredis
 
-        client = aioredis.from_url(settings.redis_url, socket_connect_timeout=2)
-        await client.ping()
-        await client.aclose()
+        redis_client = aioredis.from_url(settings.redis_url, socket_connect_timeout=2)
+        await redis_client.ping()
+        await redis_client.aclose()
         checks["redis"] = "ok"
     except Exception as exc:
         checks["redis"] = f"error: {exc}"
@@ -47,8 +47,8 @@ async def readyz() -> dict[str, Any]:
     try:
         import httpx
 
-        async with httpx.AsyncClient(timeout=3) as client:
-            resp = await client.get(f"{settings.llm_base_url}/models")
+        async with httpx.AsyncClient(timeout=3) as http_client:
+            resp = await http_client.get(f"{settings.llm_base_url}/models")
         checks["llm"] = "ok" if resp.status_code < 500 else "degraded"
     except Exception as exc:
         # 模型不可用不阻塞就绪：网关有降级链

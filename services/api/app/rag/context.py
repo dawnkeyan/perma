@@ -8,7 +8,6 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from app.core.config import settings
 from app.core.logging import get_logger
 from app.rag.chunking import estimate_tokens
 from app.rag.retriever import RetrievedChunk
@@ -47,8 +46,8 @@ class ContextBlock:
     text: str
     citations: list[Citation]
     token_count: int
-    dropped: int = 0          # 因预算被丢弃的条目数
-    deduped: int = 0          # 被去重合并的条目数
+    dropped: int = 0  # 因预算被丢弃的条目数
+    deduped: int = 0  # 被去重合并的条目数
 
     @property
     def is_empty(self) -> bool:
@@ -123,9 +122,7 @@ def assemble_context(
         used_tokens += block_tokens
 
     text = (
-        "<参考资料>\n"
-        + "\n".join(blocks)
-        + "</参考资料>\n"
+        "<参考资料>\n" + "\n".join(blocks) + "</参考资料>\n"
         "要求：只能在 <依据> 中引用已给出的编号，不得生成不存在的编号；"
         "若参考资料不足以回答，明确说明并给出通用建议，不要编造依据。"
     )
@@ -184,7 +181,7 @@ def build_emotion_context(
 ) -> str:
     """把情绪记录压缩成注入 Prompt 的上下文摘要。"""
     if not entries:
-        return "（用户近 %d 天没有情绪记录）" % days
+        return f"（用户近 {days} 天没有情绪记录）"
 
     intensities = [e.get("intensity", 0) for e in entries if e.get("intensity")]
     avg_intensity = sum(intensities) / len(intensities) if intensities else 0
@@ -193,7 +190,7 @@ def build_emotion_context(
         emotion = entry.get("emotion")
         if emotion:
             emotions[emotion] = emotions.get(emotion, 0) + 1
-    top_emotion = max(emotions, key=emotions.get) if emotions else "未知"
+    top_emotion = max(emotions, key=lambda name: emotions[name]) if emotions else "未知"
 
     tag_count: dict[str, int] = {}
     for entry in entries:

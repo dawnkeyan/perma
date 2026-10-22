@@ -24,15 +24,20 @@ Lumina 拾光是一个**积极心理学 AI 情绪教练**微信小程序。服�
 ┌──────────────────────────────────────────────────────────────────────┐
 │  接入层  apps/miniapp                                                │
 │  微信小程序（Taro 4 + React 18 + TS）                                │
-│    pages/chat      对话页                                            │
-│    pages/journal   情绪日记页                                        │
-│    services/       API 封装 / 登录态                                 │
-│    utils/track     埋点上报                                          │
+│    pages/index      首页（今天）：今日状态 + 工具卡片                  │
+│    pages/journal    情绪日记页                                       │
+│    pages/chat       对话页（流式 + 工具入口）                        │
+│    pages/timeline   回顾页（情绪轨迹）                               │
+│    pages/profile    我的（数据概览 + 边界说明）                       │
+│    services/        API 封装 / 登录态                                │
+│    stores/chat.ts   跨 tab 页传递「待进入的工具」                     │
+│    utils/track      埋点上报                                         │
 └───────────────────────────────┬──────────────────────────────────────┘
                                 │ HTTPS / JSON
 ┌───────────────────────────────▼──────────────────────────────────────┐
 │  接口层  services/api/app/api/v1                                     │
-│  chat.py   对话（流式 SSE）  journal.py  日记  health.py  健康检查  │
+│  chat.py   对话（流式 SSE）  journal.py  日记  tools.py  工具目录    │
+│  health.py  健康检查                                              │
 │  ──────────────────── 鉴权 / 参数校验 / 统一错误码 ─────────────────  │
 └───────────────────────────────┬──────────────────────────────────────┘
 ┌───────────────────────────────▼──────────────────────────────────────┐
@@ -156,7 +161,9 @@ lumina/
 ├── apps/
 │   └── miniapp/                   # 微信小程序（Taro 4 + React 18 + TS）
 │       ├── package.json           # 依赖与脚本（dev:weapp / build:weapp / lint / typecheck）
+│       ├── package-lock.json      # 依赖锁定（CI 用 npm ci 安装，必须提交）
 │       ├── tsconfig.json          # TS 配置
+│       ├── .eslintrc.js           # ESLint 规则（类型检查交给 tsc）
 │       ├── config/index.ts        # Taro 构建配置
 │       └── src/
 │           ├── app.ts             # 小程序入口：全局状态与生命周期
@@ -165,11 +172,16 @@ lumina/
 │           ├── config.ts          # 环境配置（开发/生产 API 地址）
 │           ├── env.d.ts           # 类型声明
 │           ├── pages/
-│           │   ├── chat/index.tsx     # 对话页：SSE 流式渲染、微行动卡片
-│           │   └── journal/index.tsx  # 情绪日记页：打分 + 标签 + 历史
+│           │   ├── index/index.tsx     # 首页（今天）：今日状态 + 工具卡片网格
+│           │   ├── journal/index.tsx  # 情绪日记页：打分 + 标签 + 历史
+│           │   ├── chat/index.tsx     # 对话页：SSE 流式渲染、微行动卡片、工具入口
+│           │   ├── timeline/index.tsx # 回顾页：按日聚合的情绪轨迹
+│           │   └── profile/index.tsx  # 我的：数据概览、偏好、边界说明
 │           ├── services/
-│           │   ├── api.ts              # 后端 API 封装（统一错误处理）
+│           │   ├── api.ts              # 后端 API 封装（统一错误处理 + SSE 流解析）
 │           │   └── auth.ts             # 微信登录换 token
+│           ├── stores/
+│           │   └── chat.ts             # zustand：跨 tab 页传递「待进入的工具」
 │           └── utils/track.ts          # 埋点上报（北极星指标：有效干预次数）
 │
 ├── services/
@@ -185,9 +197,11 @@ lumina/
 │       │   ├── api/v1/             # HTTP 路由
 │       │   │   ├── chat.py         #   对话接口（流式 SSE + 同步两种模式）
 │       │   │   ├── journal.py      #   情绪日记 CRUD
+│       │   │   ├── tools.py        #   工具目录（首页工具卡片）
 │       │   │   └── health.py       #   健康检查（存活/就绪分离）
 │       │   ├── schemas/            # 请求/响应模型
 │       │   │   ├── chat.py         #   对话相关契约（四段式响应的结构定义）
+│       │   │   ├── tools.py        #   工具对外契约（刻意不下发 focus）
 │       │   │   └── __init__.py
 │       │   ├── services/           # 用例编排层
 │       │   │   └── chat_service.py #   一次对话的完整编排：取上下文→跑图→落库
@@ -196,6 +210,8 @@ lumina/
 │       │   │   ├── nodes.py        #   各节点实现（检索/生成/守卫/行动/反思）
 │       │   │   ├── state.py        #   状态定义（TypedDict）+ 意图枚举
 │       │   │   └── safety.py       #   安全护栏：危机/医疗/注入（P0 红线）
+│       │   ├── tools/              # 工具目录（产品化的一层抽象）
+│       │   │   └── catalog.py      #   工具定义：引导流程 + 检索侧重 + 固定话术
 │       │   ├── rag/                # 检索层
 │       │   │   ├── chunking.py     #   分块：标题层级切分 + 父子块（small-to-big）
 │       │   │   ├── retriever.py    #   混合检索：向量 + BM25 → RRF → rerank
@@ -374,6 +390,7 @@ packages/datasets/golden/*.jsonl
 | 成本 | `services/api/app/llm/pricing.py` | 上游调价时改这里；`llm_calls` 表会自动归因 |
 | 评测门槛 | `services/api/app/eval/gate.py` 的 `RULES` | **降低门槛需要在 PR 里说明理由** |
 | 小程序界面 | `apps/miniapp/src/pages/**` | 改完跑 `npm run typecheck && npm run lint` |
+| 工具目录 | `services/api/app/tools/catalog.py` | 新增工具只改目录（不新增执行链路）；同步 `tests/test_tools.py` 与 `docs/PRD.md` |
 | 监控看板 | `ops/grafana/dashboards/lumina-overview.json` | 改完在 Grafana 里导入验证 |
 | 部署流程 | `ops/scripts/*.sh`、`docker-compose.prod.yml` | 改完用 `docker compose config -q` 校验 |
 | 告警规则 | `ops/prometheus/alerts.yml` | 改完用 `promtool check rules` 校验 |
